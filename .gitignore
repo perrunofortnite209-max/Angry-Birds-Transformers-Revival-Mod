@@ -1,0 +1,13 @@
+# Never commit original or modified game packages
+*.apk
+*.aab
+*.apks
+private-input/
+reports/
+
+# Signing material and local secrets
+*.jks
+*.keystore
+*.pem
+*.p12
+.env
