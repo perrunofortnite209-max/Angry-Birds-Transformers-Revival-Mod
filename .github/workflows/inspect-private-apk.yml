@@ -1,6 +1,11 @@
 name: Inspect APK (read-only)
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-private-apk.yml"
+      - "tools/inspect-native-disassembly.sh"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -22,7 +27,7 @@ jobs:
       - name: Install read-only inspection utilities
         run: |
           sudo apt-get update
-          sudo apt-get install -y unzip binutils
+          sudo apt-get install -y unzip binutils llvm
 
       - name: Download APK from this repository's Release
         env:
@@ -47,6 +52,7 @@ jobs:
           set -euo pipefail
           bash tools/inspect-apk.sh "$APK_FILE"
           bash tools/inspect-native-fps.sh "$APK_FILE"
+          bash tools/inspect-native-disassembly.sh "$APK_FILE"
 
       - name: Publish text report only
         uses: actions/upload-artifact@v4
