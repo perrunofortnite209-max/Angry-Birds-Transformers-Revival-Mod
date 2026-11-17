@@ -72,6 +72,7 @@ jobs:
               -import "$OUT" -overwrite \
               -scriptPath ghidra_scripts \
               -postScript FindFpsStringXrefs.java "reports/fps-xrefs-$ABI.txt" \
+              -postScript TraceFpsControlData.java "reports/fps-control-trace-$ABI.txt" \
               -analysisTimeoutPerFile 900
           done
 
