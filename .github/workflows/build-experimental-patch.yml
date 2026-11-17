@@ -42,14 +42,13 @@ jobs:
           python3 -m pip install --user pyelftools
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Set up Android SDK (supported packages only)
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: "platform-tools,build-tools;35.0.0"
 
-      - name: Add Android build tools to PATH
+      - name: Install Android build tools
         run: |
           set -euo pipefail
+          sdkmanager --install "platform-tools" "build-tools;35.0.0"
           test -x "$ANDROID_HOME/build-tools/35.0.0/zipalign"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
