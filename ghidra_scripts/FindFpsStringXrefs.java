@@ -69,7 +69,7 @@ public class FindFpsStringXrefs extends GhidraScript {
             while (fit.hasNext()) {
                 Function fn = fit.next();
                 String n = fn.getName();
-                if (n.matches("(?i).*(fps|framerate|frame.?rate|clamp.*target|target.*fps|desiredframerate).*")) {
+                if (n.matches("(?i).*(fps|framerate|frame.?rate|clamp.*target|target.*fps|desiredframerate|dopresent|updaterecommendedperformance|processframe|loadmiscxml).*")) {
                     candidates.add(fn);
                 }
             }
