@@ -1,0 +1,52 @@
+name: Locate FPS functions (read-only)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/locate-fps-functions.yml"
+      - "tools/locate_fps_functions.py"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag containing the original APK"
+        required: true
+        default: "game"
+
+permissions:
+  contents: read
+
+jobs:
+  locate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout tools
+        uses: actions/checkout@v4
+
+      - name: Download original APK from Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || 'game' }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y gh
+          mkdir -p private-input reports
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "*.apk" --dir private-input
+          mapfile -t APKS < <(find private-input -maxdepth 1 -type f -name '*.apk')
+          test "${#APKS[@]}" -eq 1
+          echo "APK_FILE=${APKS[0]}" >> "$GITHUB_ENV"
+
+      - name: Locate exact analyzed functions without patching
+        run: |
+          set -euo pipefail
+          python3 tools/locate_fps_functions.py "$APK_FILE" --report reports/fps-function-locations.json
+
+      - name: Publish location report
+        uses: actions/upload-artifact@v4
+        with:
+          name: abt-fps-function-locations
+          path: reports/fps-function-locations.json
+          if-no-files-found: error
+          retention-days: 7
