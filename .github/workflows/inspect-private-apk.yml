@@ -5,7 +5,8 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/inspect-private-apk.yml"
-      - "tools/inspect-native-disassembly.sh"
+      - "tools/**"
+      - "ghidra_scripts/**"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -19,7 +20,7 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - name: Checkout tools
         uses: actions/checkout@v4
@@ -27,12 +28,15 @@ jobs:
       - name: Install read-only inspection utilities
         run: |
           sudo apt-get update
-          sudo apt-get install -y unzip binutils llvm
+          sudo apt-get install -y unzip binutils llvm curl jq
+
+      - name: Install Ghidra headless
+        run: bash tools/install-ghidra.sh
 
       - name: Download APK from this repository's Release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ inputs.release_tag || 'game' }}
         run: |
           set -euo pipefail
           mkdir -p private-input
@@ -54,7 +58,23 @@ jobs:
           bash tools/inspect-native-fps.sh "$APK_FILE"
           bash tools/inspect-native-disassembly.sh "$APK_FILE"
 
-      - name: Publish text report only
+      - name: Analyze ARM libraries and FPS cross-references with Ghidra
+        run: |
+          set -euo pipefail
+          mkdir -p native-work reports
+          for ABI in arm64-v8a armeabi-v7a; do
+            LIB="lib/$ABI/libABBS.so"
+            OUT="native-work/libABBS-$ABI.so"
+            unzip -p "$APK_FILE" "$LIB" > "$OUT"
+            .tools/ghidra/support/analyzeHeadless \
+              "$RUNNER_TEMP/ghidra-project-$ABI" "ABT-$ABI" \
+              -import "$OUT" -overwrite \
+              -scriptPath ghidra_scripts \
+              -postScript FindFpsStringXrefs.java "reports/fps-xrefs-$ABI.txt" \
+              -analysisTimeoutPerFile 900
+          done
+
+      - name: Publish text reports only
         uses: actions/upload-artifact@v4
         with:
           name: abt-apk-analysis
