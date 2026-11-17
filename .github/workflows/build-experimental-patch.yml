@@ -60,10 +60,10 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import io, zipfile
+          import io, os, zipfile
           from pathlib import Path
           from elftools.elf.elffile import ELFFile
-          apk = Path("$APK_FILE")
+          apk = Path(os.environ["APK_FILE"])
           with zipfile.ZipFile(apk) as z:
               for name, va in [("lib/arm64-v8a/libABBS.so", 0x7e6644), ("lib/armeabi-v7a/libABBS.so", 0x51debc)]:
                   blob = z.read(name)
