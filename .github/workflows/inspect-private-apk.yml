@@ -4,17 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Private Release tag containing the original APK asset"
+        description: "Release tag containing the original APK asset"
         required: true
-        default: "apk-baseline"
+        default: "game"
 
 permissions:
   contents: read
 
 jobs:
   inspect:
-    # This job is intentionally disabled on public repositories.
-    if: ${{ github.event.repository.private == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -26,7 +24,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y unzip binutils
 
-      - name: Download APK from this private repository's Release
+      - name: Download APK from this repository's Release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag }}
