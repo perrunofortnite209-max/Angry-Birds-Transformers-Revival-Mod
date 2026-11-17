@@ -73,3 +73,8 @@ No se debe instalar un APK modificado si no se confía en su origen o firma. Una
 Al enviar resultados, indica modelo del dispositivo, versión de Android, SoC/GPU, frecuencia real de pantalla, versión exacta del juego, FPS observados y pasos para reproducir el resultado. No publiques datos personales, tokens ni archivos privados.
 
 Consulta [NOTICE.md](NOTICE.md) para el aviso de propiedad intelectual y carácter no oficial.
+
+
+## Laboratorio privado del APK
+
+El workflow de análisis de solo lectura está preparado en [`.github/workflows/inspect-private-apk.yml`](.github/workflows/inspect-private-apk.yml). Sigue la [guía del laboratorio privado](docs/PRIVATE_APK_LAB.md). El trabajo se omite en repositorios públicos y publica solo informes de texto, nunca el APK.
