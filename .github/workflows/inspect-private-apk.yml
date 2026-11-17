@@ -66,6 +66,7 @@ jobs:
             LIB="lib/$ABI/libABBS.so"
             OUT="native-work/libABBS-$ABI.so"
             unzip -p "$APK_FILE" "$LIB" > "$OUT"
+            mkdir -p "$RUNNER_TEMP/ghidra-project-$ABI"
             .tools/ghidra/support/analyzeHeadless \
               "$RUNNER_TEMP/ghidra-project-$ABI" "ABT-$ABI" \
               -import "$OUT" -overwrite \
