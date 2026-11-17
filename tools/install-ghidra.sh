@@ -9,7 +9,11 @@ if [[ -x "$TOOLS/ghidra/support/analyzeHeadless" ]]; then
 fi
 sudo apt-get update
 sudo apt-get install -y openjdk-21-jdk unzip curl jq
-API="$(curl -fsSL https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/latest)"
+API="$(curl -fsSL \
+  -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  -H "Authorization: Bearer ${GH_TOKEN:-${GITHUB_TOKEN:-}}" \
+  https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/latest)"
 URL="$(jq -r '.assets[] | select(.name | test("^ghidra_.*PUBLIC_.*zip$")) | .browser_download_url' <<< "$API" | head -n1)"
 [[ -n "$URL" && "$URL" != "null" ]] || { echo "No se encontró el ZIP público de Ghidra" >&2; exit 1; }
 curl -fL --retry 3 "$URL" -o "$TOOLS/ghidra.zip"
