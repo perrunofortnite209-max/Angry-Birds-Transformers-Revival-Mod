@@ -82,6 +82,32 @@ jobs:
                           print(f".text addr={start:#x} offset={int(sec['sh_offset']):#x}; target offset={pos:#x}; bytes={blob[pos:pos+4].hex()}")
           PY
 
+      - name: Inspect candidate instruction locations
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import io, os, zipfile
+          from pathlib import Path
+          from elftools.elf.elffile import ELFFile
+          with zipfile.ZipFile(os.environ["APK_FILE"]) as z:
+              cases = [("lib/arm64-v8a/libABBS.so", 0x7e6644, bytes.fromhex("80078052")), ("lib/armeabi-v7a/libABBS.so", 0x51debc, bytes.fromhex("3c00a0e3"))]
+              for name, va, needle in cases:
+                  blob = z.read(name); elf = ELFFile(io.BytesIO(blob))
+                  print(f"\\n{name}: Ghidra address={va:#x}; bytes at raw offset={blob[va:va+4].hex()}; signature={needle.hex()}")
+                  hits=[]; pos=0
+                  while True:
+                      pos=blob.find(needle,pos)
+                      if pos<0: break
+                      hits.append(pos); pos+=1
+                  print("signature offsets:", ", ".join(hex(x) for x in hits[:80]), "count=",len(hits))
+                  for seg in elf.iter_segments():
+                      if seg["p_type"] == "PT_LOAD":
+                          start, off, size = int(seg["p_vaddr"]), int(seg["p_offset"]), int(seg["p_filesz"])
+                          if start <= va < start+size:
+                              mapped=off+va-start
+                              print(f"PT_LOAD VA {start:#x} OFF {off:#x} => mapped {mapped:#x}, bytes={blob[mapped:mapped+4].hex()}")
+          PY
+
       - name: Apply guarded native patch (60 to 144 in gameplay)
         run: |
           set -euo pipefail
