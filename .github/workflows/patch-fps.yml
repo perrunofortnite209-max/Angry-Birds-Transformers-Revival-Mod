@@ -1,0 +1,57 @@
+name: Patch FPS in original APK (guarded)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/patch-fps.yml"
+      - "tools/patch_fps_experimental.py"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag containing the exact analyzed original APK"
+        required: true
+        default: "game"
+
+permissions:
+  contents: read
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout patch tools
+        uses: actions/checkout@v4
+
+      - name: Download original APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || 'game' }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y gh
+          mkdir -p private-input output reports
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "*.apk" --dir private-input
+          mapfile -t APKS < <(find private-input -maxdepth 1 -type f -name '*.apk')
+          if [[ "${#APKS[@]}" -ne 1 ]]; then
+            echo "Se esperaba exactamente un APK original; encontrados: ${#APKS[@]}" >&2
+            exit 1
+          fi
+          echo "APK_FILE=${APKS[0]}" >> "$GITHUB_ENV"
+
+      - name: Apply guarded FPS patch and verify APK
+        run: |
+          set -euo pipefail
+          python3 tools/patch_fps_experimental.py "$APK_FILE" output/Angry-Birds-Transformers-Revival-Mod-unsigned.apk --report reports/fps-patch-report.json
+
+      - name: Publish patched APK and verification report
+        uses: actions/upload-artifact@v4
+        with:
+          name: abt-fps-patched-unsigned
+          path: |
+            output/Angry-Birds-Transformers-Revival-Mod-unsigned.apk
+            reports/fps-patch-report.json
+          if-no-files-found: error
+          retention-days: 7
