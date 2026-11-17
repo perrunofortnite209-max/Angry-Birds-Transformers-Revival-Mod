@@ -1,74 +1,42 @@
 #!/usr/bin/env python3
-"""Experimental, guarded FPS patch for Angry Birds Transformers 2.42.0.
-
-Only changes the exact immediate in CApp::GetDesiredFramerate() for ARM64/ARM32.
-It refuses to patch if the APK or instruction bytes differ from the analyzed build.
-"""
+"""Guarded FPS patch for the exact analyzed Angry Birds Transformers 2.42.0 APK."""
 from __future__ import annotations
 import argparse, hashlib, io, json, zipfile
 from pathlib import Path
-from elftools.elf.elffile import ELFFile
 
 EXPECTED_APK_SHA256 = "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013"
-PATCHES = {
+TARGETS = {
     "lib/arm64-v8a/libABBS.so": {
-        "abi": "AArch64",
-        "vaddr": 0x007E6644,
-        "old": bytes.fromhex("80078052"),  # mov w0, #0x3c (60)
-        "new": bytes.fromhex("00128052"),  # mov w0, #0x90 (144)
-        "machine": "EM_AARCH64",
+        "abi": "AArch64", "signature": bytes.fromhex(
+            "4830009008ed42f9080140f9080100b4083d40f9c80000b4"
+            "08bd42b91f0900716100005480078052c0035fd6e0031f2ac0035fd6"
+        ), "instruction_offset": 0x24,
+        "old": bytes.fromhex("80078052"), "new": bytes.fromhex("00128052"),
     },
     "lib/armeabi-v7a/libABBS.so": {
-        "abi": "ARM32",
-        "vaddr": 0x0051DEBC,
-        "old": bytes.fromhex("3c00a0e3"),  # mov r0, #0x3c (60)
-        "new": bytes.fromhex("9000a0e3"),  # mov r0, #0x90 (144)
-        "machine": "EM_ARM",
+        "abi": "ARM32", "signature": bytes.fromhex(
+            "38009fe500009fe7001090e50000a0e3000051e31eff2f01"
+            "500091e5000050e30400000a041290e53c00a0e3020051e3"
+            "0000a0131eff2fe10000a0e31eff2fe1"
+        ), "instruction_offset": 0x28,
+        "old": bytes.fromhex("3c00a0e3"), "new": bytes.fromhex("9000a0e3"),
     },
 }
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
-def vaddr_to_offset(blob: bytes, vaddr: int, expected_machine: str) -> int:
-    elf = ELFFile(io.BytesIO(blob))
-    machine = elf.header["e_machine"]
-    if machine != expected_machine:
-        raise RuntimeError(f"Arquitectura incorrecta: {machine}, esperada {expected_machine}")
-    for seg in elf.iter_segments():
-        if seg["p_type"] == "PT_LOAD":
-            start = int(seg["p_vaddr"])
-            size = int(seg["p_filesz"])
-            if start <= vaddr and vaddr + 4 <= start + size:
-                return int(seg["p_offset"]) + (vaddr - start)
-    raise RuntimeError(f"No se pudo mapear VA 0x{vaddr:x} a bytes del ELF")
-
-def patch_library(blob: bytes, spec: dict) -> tuple[bytes, dict]:
-    offset = vaddr_to_offset(blob, spec["vaddr"], spec["machine"])
-    actual = blob[offset:offset+4]
-    if actual != spec["old"]:
-        raise RuntimeError(
-            f"{spec['abi']}: bytes inesperados en VA 0x{spec['vaddr']:x} "
-            f"(offset 0x{offset:x}): {actual.hex()} != {spec['old'].hex()}; "
-            "se aborta para evitar corromper la biblioteca"
-        )
-    out = bytearray(blob)
-    out[offset:offset+4] = spec["new"]
-    if bytes(out[offset:offset+4]) != spec["new"]:
-        raise RuntimeError(f"{spec['abi']}: verificación posterior fallida")
-    return bytes(out), {
-        "abi": spec["abi"], "virtual_address": hex(spec["vaddr"]),
-        "file_offset": hex(offset), "before": actual.hex(),
-        "after": spec["new"].hex(), "library_sha256_before": sha256(blob),
-        "library_sha256_after": sha256(bytes(out)),
-    }
-
-def is_old_signature_file(name: str) -> bool:
-    upper = name.upper()
-    return upper.startswith("META-INF/") and (
-        upper.endswith((".RSA", ".DSA", ".EC", ".SF")) or
-        upper == "META-INF/MANIFEST.MF"
-    )
+def find_unique(data: bytes, needle: bytes, label: str) -> int:
+    hits, start = [], 0
+    while True:
+        pos = data.find(needle, start)
+        if pos < 0:
+            break
+        hits.append(pos)
+        start = pos + 1
+    if len(hits) != 1:
+        raise RuntimeError(f"{label}: se esperaba 1 firma completa y se encontraron {len(hits)}")
+    return hits[0]
 
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -79,32 +47,68 @@ def main() -> None:
     source = args.input_apk.read_bytes()
     digest = sha256(source)
     if digest != EXPECTED_APK_SHA256:
-        raise SystemExit(f"APK SHA-256 no coincide ({digest}); solo se parchea el original analizado.")
-    report = {"apk_sha256_original": digest, "patches": [], "removed_old_signatures": []}
+        raise SystemExit(f"APK distinto del analizado: SHA-256 {digest}")
+    report = {"original_apk_sha256": digest, "target_fps_constant": 144,
+              "patches": [], "removed_old_signatures": []}
     with zipfile.ZipFile(io.BytesIO(source), "r") as zin:
         names = zin.namelist()
-        for name in PATCHES:
-            if names.count(name) != 1:
-                raise SystemExit(f"Se esperaba una sola entrada {name}; encontradas {names.count(name)}")
         replacements = {}
-        for name, spec in PATCHES.items():
-            patched, item = patch_library(zin.read(name), spec)
-            replacements[name] = patched
-            report["patches"].append({"path": name, **item})
-        out_buffer = io.BytesIO()
-        with zipfile.ZipFile(out_buffer, "w") as zout:
+        for path, spec in TARGETS.items():
+            if names.count(path) != 1:
+                raise RuntimeError(f"{path}: entrada ausente o duplicada")
+            original = zin.read(path)
+            function_offset = find_unique(original, spec["signature"], path)
+            offset = function_offset + spec["instruction_offset"]
+            before = original[offset:offset+4]
+            if before != spec["old"]:
+                raise RuntimeError(
+                    f"{path} offset {offset:#x}: bytes {before.hex()} inesperados; "
+                    f"se esperaban {spec['old'].hex()}"
+                )
+            patched = bytearray(original)
+            patched[offset:offset+4] = spec["new"]
+            if bytes(patched[offset:offset+4]) != spec["new"]:
+                raise RuntimeError(f"{path}: verificación posterior fallida")
+            # The exact function signature must now be absent; the modified bytes must be present.
+            if bytes(patched).find(spec["signature"]) != -1:
+                raise RuntimeError(f"{path}: la firma original sigue presente")
+            replacements[path] = bytes(patched)
+            report["patches"].append({
+                "path": path, "abi": spec["abi"],
+                "function_file_offset": hex(function_offset),
+                "instruction_file_offset": hex(offset),
+                "before": before.hex(), "after": spec["new"].hex(),
+                "library_sha256_before": sha256(original),
+                "library_sha256_after": sha256(bytes(patched)),
+                "verified": True,
+            })
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w") as zout:
             for info in zin.infolist():
-                if is_old_signature_file(info.filename):
+                upper = info.filename.upper()
+                is_signature = upper.startswith("META-INF/") and (
+                    upper.endswith((".RSA", ".DSA", ".EC", ".SF"))
+                    or upper == "META-INF/MANIFEST.MF"
+                )
+                if is_signature:
                     report["removed_old_signatures"].append(info.filename)
                     continue
-                payload = replacements.get(info.filename)
-                if payload is None:
-                    payload = zin.read(info.filename)
-                # Preserve entry metadata and compression method; zipalign runs after this script.
-                zout.writestr(info, payload)
+                zout.writestr(info, replacements.get(info.filename, zin.read(info.filename)))
     args.output_apk.parent.mkdir(parents=True, exist_ok=True)
-    args.output_apk.write_bytes(out_buffer.getvalue())
-    report["unsigned_patched_apk_sha256"] = sha256(args.output_apk.read_bytes())
+    args.output_apk.write_bytes(output.getvalue())
+    # Re-open and validate the generated APK container and patched native entries.
+    with zipfile.ZipFile(args.output_apk, "r") as check:
+        bad = check.testzip()
+        if bad:
+            raise RuntimeError(f"ZIP/APK corrupto en entrada {bad}")
+        for path, spec in TARGETS.items():
+            data = check.read(path)
+            off = int(next(x["instruction_file_offset"] for x in report["patches"] if x["path"] == path), 16)
+            if data[off:off+4] != spec["new"]:
+                raise RuntimeError(f"Verificación del APK generado falló: {path}")
+    report["patched_unsigned_apk_sha256"] = sha256(args.output_apk.read_bytes())
+    report["patched_apk_size"] = args.output_apk.stat().st_size
+    report["apk_zip_test"] = "passed"
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
