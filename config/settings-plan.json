@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "project": "Angry Birds Transformers Revival Mod",
+  "status": "design-only",
+  "notice": "This file is a specification. The game does not read it yet.",
+  "welcome": {
+    "enabled": true,
+    "title": "Angry Birds Transformers Revival Mod",
+    "message": "Bienvenido a mi mod de Angry Birds Transformers con soporte para teléfonos modernos. Desbloqueo FPS hasta 144 Hz. ¡Disfrútalo!",
+    "status": "planned"
+  },
+  "floatingPanel": {
+    "enabled": true,
+    "draggable": true,
+    "rememberPosition": true,
+    "status": "planned"
+  },
+  "frameRate": {
+    "default": "system",
+    "choices": [30, 60, 90, 120, 144],
+    "availabilityPolicy": "only-offer-device-and-engine-validated-modes",
+    "fallbackFps": [60, 30],
+    "status": "planned"
+  },
+  "graphics": {
+    "defaultProfile": "original",
+    "textureQuality": ["original", "reduced"],
+    "effects": ["original", "reduced"],
+    "shadows": ["original", "reduced", "off"],
+    "renderScale": ["original", "reduced"],
+    "status": "research"
+  },
+  "display": {
+    "sync": ["system-default", "on", "off"],
+    "requestSupportedRefreshRate": true,
+    "status": "research"
+  },
+  "performance": {
+    "batteryAwareFallback": true,
+    "thermalAwareFallback": true,
+    "neverForceUnsupportedRefreshRate": true,
+    "status": "planned"
+  },
+  "compatibilityTargets": [
+    "Qualcomm Snapdragon",
+    "MediaTek",
+    "Samsung Exynos",
+    "Other Android-compatible ARM SoCs"
+  ]
+}
