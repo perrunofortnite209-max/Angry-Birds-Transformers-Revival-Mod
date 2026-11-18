@@ -35,11 +35,20 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends curl
-          sdkmanager --install 'build-tools;35.0.0'
+          sdkmanager --install 'build-tools;35.0.0' 'ndk;27.2.12479018'
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
           curl -fL --retry 3 https://github.com/iBotPeaches/Apktool/releases/download/v2.11.1/apktool_2.11.1.jar -o "$RUNNER_TEMP/apktool.jar"
           printf '#!/usr/bin/env bash\nexec java -jar "$RUNNER_TEMP/apktool.jar" "$@"\n' | sudo tee /usr/local/bin/apktool >/dev/null
           sudo chmod +x /usr/local/bin/apktool
+      - name: Compile runtime JNI bridge for both ABIs
+        run: |
+          set -euo pipefail
+          NDK="$ANDROID_HOME/ndk/27.2.12479018"
+          CLANG="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
+          mkdir -p output/bridge
+          "$CLANG" --target=aarch64-linux-android21 -shared -fPIC -O2 -fvisibility=hidden -Wl,-soname,libabtmod.so -o output/bridge/libabtmod-arm64.so tools/abt_native_bridge.cpp -ldl
+          "$CLANG" --target=armv7a-linux-androideabi21 -shared -fPIC -O2 -fvisibility=hidden -Wl,-soname,libabtmod.so -o output/bridge/libabtmod-armv7.so tools/abt_native_bridge.cpp -ldl
+          file output/bridge/*.so
       - name: Download exact original APK
         run: |
           set -euo pipefail
@@ -50,7 +59,7 @@ jobs:
       - name: Build combined DEX and native patch
         run: |
           set -euo pipefail
-          python tools/build_combined_safe_apk.py --apk input/original.apk --out output/ABT-REVIVAL-COMBINED-unsigned.apk --repo . --icon input/user-icon.png
+          python tools/build_combined_safe_apk.py --apk input/original.apk --out output/ABT-REVIVAL-COMBINED-unsigned.apk --repo . --icon input/user-icon.png --native-arm64 output/bridge/libabtmod-arm64.so --native-armv7 output/bridge/libabtmod-armv7.so
       - name: Align, sign and verify
         env:
           ABT_SIGNING_KEY_BASE64: ${{ secrets.ABT_SIGNING_KEY_BASE64 }}
