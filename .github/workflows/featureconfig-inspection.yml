@@ -1,0 +1,83 @@
+name: Inspect native feature configuration definitions
+
+on:
+  push:
+    branches: [feature/full-revival-mod]
+    paths:
+      - ".github/workflows/featureconfig-inspection.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-revival-mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install archive dependencies
+        run: python -m pip install lz4
+      - name: Download original APK privately and extract PAKs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/private" "$RUNNER_TEMP/paks" "$RUNNER_TEMP/out"
+          gh release download game --repo "$GITHUB_REPOSITORY" --pattern "*.apk" --dir "$RUNNER_TEMP/private"
+          APK="$(find "$RUNNER_TEMP/private" -maxdepth 1 -name '*.apk' -print -quit)"
+          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  $APK" | sha256sum -c -
+          python - "$APK" "$RUNNER_TEMP/paks" <<'PY'
+          import sys,zipfile
+          from pathlib import Path
+          apk,out=Path(sys.argv[1]),Path(sys.argv[2])
+          with zipfile.ZipFile(apk) as z:
+              for n in z.namelist():
+                  if n.lower().endswith(".pak"):
+                      b=z.read(n)
+                      if b[:4]==b"\x02KPX": (out/Path(n).name).write_bytes(b)
+          PY
+      - name: Extract and decode Global FeatureConfig definitions
+        run: |
+          set -euo pipefail
+          git clone https://github.com/omonkeyz/angry-birds-go-rust.git "$RUNNER_TEMP/abgtool"
+          git -C "$RUNNER_TEMP/abgtool" checkout 7cd02d36d42b58b652fdc98848de08221d1a0469
+          cargo build --release --manifest-path "$RUNNER_TEMP/abgtool/abgtool/Cargo.toml"
+          ABG="$RUNNER_TEMP/abgtool/abgtool/target/release/abgtool"
+          FOUND=0
+          for p in "$RUNNER_TEMP"/paks/*.pak; do
+            if python tools/xgs_kpx_v2.py list "$p" 2>/dev/null | grep -qi 'Global/FeatureConfig.xml'; then
+              mkdir -p "$RUNNER_TEMP/unpacked"
+              "$ABG" unpack "$p" "$RUNNER_TEMP/unpacked"
+              f="$(find "$RUNNER_TEMP/unpacked" -type f -iname 'FeatureConfig.xml' -print -quit)"
+              test -n "$f"
+              "$ABG" xox "$f" > "$RUNNER_TEMP/out/FeatureConfig.decoded.xml"
+              cp "$f" "$RUNNER_TEMP/out/FeatureConfig.original.xox2"
+              echo "Found in $(basename "$p") at $f" > "$RUNNER_TEMP/out/source.txt"
+              FOUND=1
+              break
+            fi
+          done
+          test "$FOUND" -eq 1
+          python - "$RUNNER_TEMP/out/FeatureConfig.decoded.xml" "$RUNNER_TEMP/out/feature-list.txt" <<'PY'
+          import re,sys
+          from pathlib import Path
+          s=Path(sys.argv[1]).read_text()
+          keys=("feature","name","id","default","value","description","fps","frame")
+          lines=[]
+          for tag in re.findall(r"<[^>]+>",s):
+              if any(k in tag.lower() for k in keys): lines.append(tag)
+          Path(sys.argv[2]).write_text("\n".join(lines)+"\n")
+          print("Feature definitions:",len(lines))
+          PY
+      - name: Upload text-only feature configuration
+        uses: actions/upload-artifact@v4
+        with:
+          name: featureconfig-inspection
+          path: ${{ runner.temp }}/out/
+          retention-days: 7
