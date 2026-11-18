@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Produce a text-only map of Exient XGS UI registrations and decoded XOX2 string tables.
+"""Produce a text-only map of Exient XGS UI registrations and XOX2 string pools.
 
 Read-only diagnostics only: never rewrites or repacks game assets.
 """
@@ -21,9 +21,17 @@ nav_terms = (
     "ShowMainMenu", "MainMenu", "MapScreen",
 )
 
-def decode_xox2_strings(data):
-    # XOX2 resources begin with a string-count field followed by a table of
-    # relative string offsets. Validate the complete table before decoding.
+def printable_nul_strings(data):
+    values = []
+    for raw in data.split(b"\\x00"):
+        if not raw:
+            continue
+        value = raw.decode("utf-8", "replace").strip()
+        if value and not any(ord(ch) < 32 and ch not in "\\t" for ch in value):
+            values.append(value)
+    return values
+
+def xox2_info(data):
     if len(data) < 12 or data[:4] != b"XOX2":
         return None
     count = struct.unpack_from("<I", data, 4)[0]
@@ -34,24 +42,14 @@ def decode_xox2_strings(data):
     if table_end > len(data):
         return None
     offsets = struct.unpack_from("<" + "I" * count, data, table_start)
-    pool = data[table_end:]
-    decoded = []
-    for offset in offsets:
-        if offset >= len(pool):
-            return None
-        end = pool.find(b"\0", offset)
-        if end < 0:
-            return None
-        raw = pool[offset:end]
-        value = raw.decode("utf-8", "replace")
-        if value and any(ord(ch) < 32 and ch not in "\t" for ch in value):
-            return None
-        decoded.append(value)
-    return decoded
+    # Keep the pool as a raw NUL-delimited string inventory. Offset interpretation
+    # is deliberately not assumed until the engine's exact XOX2 semantics are proven.
+    strings = printable_nul_strings(data[table_end:])
+    return count, table_end, offsets, strings
 
 rows = [
     "EXIENT XGS UI DIAGNOSTICS",
-    "Read-only report; XOX2 string tables decoded only when their offset table validates.",
+    "Read-only report. XOX2 offset semantics are not assumed; string pools are inventoried as NUL-delimited text.",
     "No game resources are modified or repacked.",
     "",
 ]
@@ -65,18 +63,23 @@ for path in sorted(root.rglob("*")):
     except OSError:
         continue
     rel = str(path.relative_to(root))
-    decoded = decode_xox2_strings(data)
-    if decoded is not None:
-        lines = decoded
-        rows.append(f"XOX2 STRING TABLE {rel} ({len(decoded)} strings)")
-        for i, value in enumerate(decoded):
-            if value:
-                rows.append(f"  S{i:04d}: {value[:500]}")
-        rows.append("")
+    info = xox2_info(data)
+    if info is not None:
+        count, table_end, offsets, pool_strings = info
+        rows.append(f"XOX2 RESOURCE {rel}: string_count={count} table_end={table_end} bytes={len(data)} pool_strings={len(pool_strings)}")
+        rows.append("  offset_table_first=" + ", ".join(str(x) for x in offsets[:16]))
+        rows.append("  offset_table_last=" + ", ".join(str(x) for x in offsets[-8:]))
+        if "settings" in path.name.lower():
+            rows.append("  === COMPLETE SETTINGS STRING POOL (NUL-DELIMITED) ===")
+            rows.extend(f"  P{i:04d}: {value[:1000]}" for i, value in enumerate(pool_strings))
+            rows.append("  === END SETTINGS STRING POOL ===")
+        lines = pool_strings
     else:
-        text = data.decode("utf-8", "replace").replace("\x00", "\n")
-        lines = text.splitlines()
-    joined = "\n".join(lines)
+        lines = printable_nul_strings(data)
+        if not lines:
+            text = data.decode("utf-8", "replace")
+            lines = text.splitlines()
+    joined = "\\n".join(lines)
     hits = [term for term in terms if term in joined]
     if not hits:
         continue
@@ -85,13 +88,13 @@ for path in sorted(root.rglob("*")):
     for i, line in enumerate(lines):
         if "registerScreen" in line:
             context = " | ".join(x for x in lines[max(0, i-2):min(len(lines), i+4)] if x)
-            screen_rows.append(f"{rel}: L{i+1}: {context[:1000]}")
+            screen_rows.append(f"{rel}: S{i+1}: {context[:2000]}")
         if any(term.lower() in line.lower() for term in nav_terms):
             context = " | ".join(x for x in lines[max(0, i-2):min(len(lines), i+4)] if x)
-            nav_rows.append(f"{rel}: L{i+1}: {context[:1000]}")
+            nav_rows.append(f"{rel}: S{i+1}: {context[:2000]}")
         if any(term in line for term in terms):
             context = " | ".join(x for x in lines[max(0, i-2):min(len(lines), i+4)] if x)
-            rows.append(f"  L{i+1}: {context[:1200]}")
+            rows.append(f"  S{i+1}: {context[:2000]}")
     rows.append("")
 
 rows.extend(["", "=== SCREEN REGISTRATIONS ==="])
@@ -99,5 +102,5 @@ rows.extend(screen_rows or ["No registerScreen strings found."])
 rows.extend(["", "=== FRONTEND / NAVIGATION HINTS ==="])
 rows.extend(nav_rows or ["No navigation hints found."])
 out.parent.mkdir(parents=True, exist_ok=True)
-out.write_text("\n".join(rows) + "\n", encoding="utf-8")
+out.write_text("\\n".join(rows) + "\\n", encoding="utf-8")
 print(f"UI map: {len(rows)} report lines -> {out}")
