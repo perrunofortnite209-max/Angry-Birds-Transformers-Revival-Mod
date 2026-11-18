@@ -46,32 +46,6 @@ jobs:
                           (out/Path(name).name).write_bytes(data)
           print("KPX archives:",len(list(out.glob("*.pak"))))
           PY
-      - name: Map device config entries to source PAK and validate rebuild support
-        run: |
-          set -euo pipefail
-          python - "$RUNNER_TEMP/paks" "$RUNNER_TEMP/out/pak-deviceconfig-map.txt" <<'PY'
-          import importlib.util,sys
-          from pathlib import Path
-          root,out=Path(sys.argv[1]),Path(sys.argv[2])
-          spec=importlib.util.spec_from_file_location("kpx", "tools/xgs_kpx_v2.py")
-          kpx=importlib.util.module_from_spec(spec); sys.modules["kpx"]=kpx; spec.loader.exec_module(kpx)
-          lines=[]
-          for pak in sorted(root.glob("*.pak")):
-              try:
-                  blob=pak.read_bytes(); meta=kpx.parse(blob)
-                  hits=[e.name for e in meta["entries"] if "deviceconfig" in e.name.lower()]
-                  if hits:
-                      rebuilt=kpx.rebuild(blob,meta)
-                      kpx.verify(blob,rebuilt,meta)
-                      lines += [f"PAK: {pak.name}", f"entries: {len(meta['entries'])}", f"roundtrip_identical: {rebuilt == blob}"]
-                      lines += [f"  {name}" for name in hits]
-                      lines.append("")
-              except Exception as exc:
-                  lines.append(f"ERROR {pak.name}: {exc}")
-          out.write_text("\\n".join(lines)+"\\n")
-          print(out.read_text())
-          if not lines: raise SystemExit("No deviceconfig entries found in parsed KPX v2 archives.")
-          PY
       - name: Build pinned XOX2 decoder and unpack all PAK archives
         run: |
           set -euo pipefail
@@ -103,6 +77,25 @@ jobs:
           print(f"XML candidates: {len(files)}; decoded: {len(files)-len(failed)}; decode errors: {len(failed)}")
           if not files: raise SystemExit("No XML files found after PAK extraction.")
           if len(files)==len(failed): raise SystemExit("No XML files could be decoded; inspect decoder compatibility.")
+          PY
+      - name: Map extracted Android device profiles to source PAK
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/unpacked" "$RUNNER_TEMP/out/pak-deviceconfig-map.txt" <<'PY'
+          import sys
+          from pathlib import Path
+          root,out=Path(sys.argv[1]),Path(sys.argv[2])
+          lines=[]
+          for folder in sorted(p for p in root.iterdir() if p.is_dir()):
+              matches=sorted(folder.rglob("*.xml"))+sorted(folder.rglob("*.XML"))
+              matches=[p for p in matches if "deviceconfig" in p.parent.as_posix().lower() or "deviceconfig" in p.name.lower()]
+              if matches:
+                  lines += [f"PAK: {folder.name}.pak", f"deviceconfig XML count: {len(matches)}"]
+                  lines += [f"  {p.relative_to(folder).as_posix()}" for p in matches]
+                  lines.append("")
+          out.write_text("\\n".join(lines)+"\\n")
+          print(out.read_text())
+          if not lines: raise SystemExit("No extracted deviceconfig XML files could be mapped to a PAK.")
           PY
       - name: Find real graphics and frame-pacing configuration candidates
         run: |
