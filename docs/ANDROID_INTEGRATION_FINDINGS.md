@@ -10,6 +10,13 @@ Status: static APK inspection partially completed; in-game menu integration is n
 - `ExientGLSurfaceView` extends Android `GLSurfaceView`, configures an EGL context, installs an Exient renderer, and forwards touch events to native input methods.
 - The game activity calls `nativeOnCreate()` after the XGS superclass has initialized.
 
+## Additional confirmed engine structure
+
+- `ExientActivity.onCreate()` creates `ExientGLSurfaceView` and installs it as the Activity's entire content view with `Window.setContentView()`.
+- `ExientGLSurfaceView$Renderer.onDrawFrame()` calls the native `nativeDrawFrame()` entry point. The main game's frame rendering therefore runs through the native engine path.
+- `XGSActivity.onCreate()` adds camera-input and virtual-keyboard views after the GL surface has been installed. Those are auxiliary engine views, not evidence of a native Android main-menu widget system.
+- The APK contains `libABBS.so` for ARM64 and ARM32. The actual in-game menu implementation has not yet been mapped to native symbols or assets.
+
 ## Integration implications
 
 - The requested UI is a button integrated into the game's existing main menu. A floating Android overlay is explicitly out of scope.
