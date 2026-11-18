@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Build a safe combined APK: welcome DEX patch + guarded native 144 FPS patch.
-All PAKs and unrelated APK entries remain byte-identical; only manifest versionCode is bumped for updates.
+"""Build a safe combined APK without a forced native FPS cap.
+All original game libraries, PAKs and unrelated APK entries remain byte-identical; only DEX, manifest and launcher icons are updated.
 """
 from __future__ import annotations
 import argparse, hashlib, importlib.util, io, json, os, re, subprocess, sys, tempfile, zipfile
@@ -8,22 +8,8 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 EXPECTED = "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013"
-TARGETS = {
- "lib/arm64-v8a/libABBS.so": [
-  ("CApp::GetDesiredFramerate",
-   "4830009008ed42f9080140f9080100b4083d40f9c80000b408bd42b91f0900716100005480078052c0035fd6e0031f2ac0035fd6",
-   0x24, "80078052", "00128052"),
-  ("CDeviceConfig::GetDesiredFramerate",
-   "fd7bbfa9fd0300918ee4ff97a83200908907805208b548b91f010071c80380522801881a1f0000710001801afd7bc1a8c0035fd6",
-   0x1c, "c8038052", "08128052")],
- "lib/armeabi-v7a/libABBS.so": [
-  ("CApp::GetDesiredFramerate",
-   "38009fe500009fe7001090e50000a0e3000051e31eff2f01500091e5000050e30400000a041290e53c00a0e3020051e30000a0131eff2fe10000a0e31eff2fe1",
-   0x28, "3c00a0e3", "9000a0e3"),
-  ("CDeviceConfig::GetDesiredFramerate",
-   "00482de976e3ffeb1c109fe51e20a0e301108fe0041091e5000051e33c200003000050e30200a0010088bde8",
-   0x0c, "1e20a0e3", "9002a0e3")]
-}
+# Keep original engine FPS constants unchanged.
+
 def sha(b): return hashlib.sha256(b).hexdigest()
 def run(cmd): print("+", " ".join(map(str,cmd)), flush=True); subprocess.run(list(map(str,cmd)),check=True)
 def load_patch(repo):
@@ -36,21 +22,6 @@ def load_controls(repo):
  spec=importlib.util.spec_from_file_location("abt_revival_controls",p)
  mod=importlib.util.module_from_spec(spec); sys.modules[spec.name]=mod; spec.loader.exec_module(mod)
  return mod.patch
-def patch_lib(path, data, report):
- b=bytearray(data)
- for fn,sighex,off,oldhex,newhex in TARGETS[path]:
-  sig=bytes.fromhex(sighex); hits=[]; start=0
-  while True:
-   pos=b.find(sig,start)
-   if pos<0: break
-   hits.append(pos); start=pos+1
-  if len(hits)!=1: raise RuntimeError(f"{path}: firma de {fn} no única ({len(hits)})")
-  at=hits[0]+off; old=bytes.fromhex(oldhex); new=bytes.fromhex(newhex)
-  if bytes(b[at:at+4])!=old: raise RuntimeError(f"{path}: bytes inesperados en {fn}: {bytes(b[at:at+4]).hex()}")
-  b[at:at+4]=new
-  if bytes(b[at:at+4])!=new: raise RuntimeError(f"Verificación fallida: {fn}")
-  report["fps_patches"].append({"library":path,"function":fn,"offset":hex(at),"before":oldhex,"after":newhex,"verified":True})
- return bytes(b)
 ICON_ENTRIES = {
  "res/aH.png",   # default
  "res/4W.png",   # ldpi
@@ -82,7 +53,7 @@ def main():
  a=ap.parse_args(); a.out.parent.mkdir(parents=True,exist_ok=True)
  src=a.apk.read_bytes()
  if sha(src)!=EXPECTED: raise RuntimeError("El APK de entrada no coincide con el original 2.42.0 analizado")
- report={"method":"DEX transplant + runtime FPS/graphics JNI bridge","target_fps":"user-selectable","pak_modified":False,"manifest_modified":True,"resources_modified":True,"icon_safe_scale":1.0,"icon_entries":[],"welcome_first_launch":True,"fps_patches":[]}
+ report={"method":"DEX transplant + runtime FPS/graphics JNI bridge","target_fps":"user-selectable","pak_modified":False,"manifest_modified":True,"resources_modified":True,"icon_safe_scale":1.0,"icon_entries":[],"welcome_first_launch":True,"fps_patches":[],"native_fps_constants_modified":False,"fps_policy":"original engine defaults until a user-selected runtime cap is applied"}
  welcome=load_patch(a.repo.resolve())
  controls=load_controls(a.repo.resolve())
  native_payloads={"lib/arm64-v8a/libabtmod.so":a.native_arm64.read_bytes(),"lib/armeabi-v7a/libabtmod.so":a.native_armv7.read_bytes()}
@@ -111,18 +82,16 @@ def main():
    olddex={n for n in original.namelist() if is_dex(n)}
    if olddex!=set(dex): raise RuntimeError(f"Conjunto DEX distinto: {olddex} vs {set(dex)}")
    names=original.namelist()
-   if any(names.count(p)!=1 for p in TARGETS): raise RuntimeError("Falta una biblioteca nativa o está duplicada")
-   replacements={p:patch_lib(p,original.read(p),report) for p in TARGETS}
    icon_names=[n for n in names if is_icon(n)]
    if len(icon_names)!=7:
     candidates=[n for n in names if "app_icon" in n.lower() or ("drawable" in n.lower() and n.lower().endswith((".png",".webp")))]
     raise RuntimeError(f"Expected 7 launcher PNGs, found {len(icon_names)}: {icon_names}; nearby resource entries: {candidates[:80]}")
-   before={n:sha(original.read(n)) for n in names if n!="AndroidManifest.xml" and not is_dex(n) and n not in TARGETS and not is_icon(n) and not is_sig(n)}
+   before={n:sha(original.read(n)) for n in names if n!="AndroidManifest.xml" and not is_dex(n) and not is_icon(n) and not is_sig(n)}
    with zipfile.ZipFile(a.out,"w") as out:
     for info in original.infolist():
      n=info.filename
      if is_sig(n): continue
-     payload=dex[n] if is_dex(n) else manifest_payload if n=="AndroidManifest.xml" else replacements[n] if n in replacements else original.read(n)
+     payload=dex[n] if is_dex(n) else manifest_payload if n=="AndroidManifest.xml" else original.read(n)
      if is_icon(n):
       from PIL import Image
       with Image.open(io.BytesIO(original.read(n))) as old_icon: w,h=old_icon.size
@@ -135,14 +104,8 @@ def main():
   with zipfile.ZipFile(a.out) as check:
    bad=check.testzip()
    if bad: raise RuntimeError(f"ZIP dañado: {bad}")
-   after={n:sha(check.read(n)) for n in check.namelist() if n!="AndroidManifest.xml" and not is_dex(n) and n not in TARGETS and n not in native_payloads and not is_icon(n) and not is_sig(n)}
+   after={n:sha(check.read(n)) for n in check.namelist() if n!="AndroidManifest.xml" and not is_dex(n) and n not in native_payloads and not is_icon(n) and not is_sig(n)}
    if before!=after: raise RuntimeError("Cambió una entrada ajena a DEX/libABBS")
-   for p in TARGETS:
-    for fn,sig,off,old,new in TARGETS[p]:
-     entry=check.read(p)
-     # Each target instruction was verified before writing; report includes exact resulting bytes.
-     match=next(x for x in report["fps_patches"] if x["library"]==p and x["function"]==fn)
-     if entry[int(match["offset"],16):int(match["offset"],16)+4]!=bytes.fromhex(new): raise RuntimeError(f"FPS patch no persistió: {fn}")
    for native_name,native_data in native_payloads.items():
     if check.read(native_name)!=native_data: raise RuntimeError(f"Native bridge mismatch: {native_name}")
    report["unchanged_entries"]=len(before); report["pak_and_unrelated_entries_sha256_identical"]=True; report["only_resource_changes_are_launcher_icon_pngs"]=True; report["apk_zip_test"]="passed"
