@@ -198,6 +198,18 @@ with zipfile.ZipFile(apk) as z:
             if count >= 80:
                 break
 
+
+# Find all direct call sites of the float-setting accessor used with enum
+# indices 0 and 1 by CreateVolatileResources, then dump its implementation.
+lines += ["", "## Debug float accessor call sites"]
+for ins in insns:
+    if ins.mnemonic == "bl" and ins.operands and ins.operands[0].type == CS_OP_IMM and int(ins.operands[0].imm) == 0x7115b8:
+        lines.append(f"BL {ins.address:#x} -> GetDebugFloat(0x7115b8)")
+        idx = next((k for k, item in enumerate(insns) if item.address == ins.address), None)
+        if idx is not None:
+            for prev in insns[max(0,idx-5):idx+4]:
+                lines.append(f"  {prev.address:08x}: {prev.mnemonic:<8} {prev.op_str}")
+
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text("\n".join(lines) + "\n", encoding="utf-8")
 print(f"Wrote {out}")
