@@ -27,6 +27,8 @@ jobs:
           curl -fL --retry 3 https://github.com/iBotPeaches/Apktool/releases/download/v2.11.1/apktool_2.11.1.jar -o "$RUNNER_TEMP/apktool.jar"
           printf '#!/usr/bin/env bash\nexec java -jar "$RUNNER_TEMP/apktool.jar" "$@"\n' | sudo tee /usr/local/bin/apktool >/dev/null
           sudo chmod +x /usr/local/bin/apktool
+          sdkmanager --install 'build-tools;35.0.0'
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
       - name: Download exact APK and user icon
         run: |
           set -euo pipefail
