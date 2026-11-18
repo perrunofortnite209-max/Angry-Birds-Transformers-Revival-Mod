@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/analyze-android-integration.yml"
       - "tools/analyze_android_integration.sh"
+      - "tools/extract_xgs_pak.py"
   workflow_dispatch:
     inputs:
       release_tag:
