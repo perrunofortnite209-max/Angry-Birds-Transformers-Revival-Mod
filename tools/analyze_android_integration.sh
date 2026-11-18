@@ -148,3 +148,36 @@ echo >> "$REPORT"
 echo "=== XGS v2/zlib UI PAK extraction and text inventory ===" >> "$REPORT"
 python3 tools/extract_xgs_pak.py "$APK" --all-paks --out "$RUNNER_TEMP/xgs-ui-extracted" --report "$OUT/xgs-pak-inventory.txt" >> "$REPORT"
 cat "$OUT/xgs-pak-inventory.txt" >> "$REPORT"
+
+ 
+echo >> "$REPORT"
+echo "=== Verified XOX2 settings screen decode (structure only) ===" >> "$REPORT"
+SETTINGS_XML="$(find "$RUNNER_TEMP/xgs-ui-extracted" -type f -iname 'uisettingsscreen.xml' -print -quit)"
+if [[ -n "$SETTINGS_XML" && -x "${ABGTOOL:-}" ]]; then
+  python3 - "$ABGTOOL" "$SETTINGS_XML" "$OUT/xox2-settings-structure.txt" <<'PYXOX'
+import subprocess, sys, xml.etree.ElementTree as ET
+tool, source, output = sys.argv[1:]
+run = subprocess.run([tool, "xox", source], check=True, text=True, capture_output=True)
+root = ET.fromstring(run.stdout)
+lines = ["Decoded XOX2 settings hierarchy (selected structural fields only)."]
+def walk(node, depth=0):
+    tag = node.tag.rsplit("}", 1)[-1]
+    attrs = []
+    for key, value in node.attrib.items():
+        k = key.rsplit("}", 1)[-1]
+        if any(term in (k + " " + value).lower() for term in
+               ("settings", "page", "button", "globalstate", "action", "label", "rategame", "mute", "restore", "zendesk", "login", "privacy", "erase", "powersave", "jenga", "featureconfig")):
+            attrs.append(f'{k}={value!r}')
+    if any(term in tag.lower() for term in ("settings", "page", "button", "window", "behaviour", "panel", "screen", "touch")) or attrs:
+        lines.append("  " * min(depth, 12) + tag + ((" " + " ".join(attrs)) if attrs else ""))
+    for child in list(node):
+        walk(child, depth + 1)
+walk(root)
+open(output, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+print(f"Decoded XOX2 settings XML successfully: {len(list(root.iter()))} XML nodes")
+PYXOX
+  cat "$OUT/xox2-settings-structure.txt" >> "$REPORT"
+else
+  echo "Settings XML or verified decoder unavailable; no asset was modified." >> "$REPORT"
+  exit 1
+fi
