@@ -53,7 +53,8 @@ def main():
         for fa,fs,fn in funcs:
             if any(key in fn.lower() for key in ("deviceconfig","loadxmlconfig","configprofile","configmanager")):
                 out.append(f"SYMBOL 0x{fa:x} size=0x{fs:x} {fn}")
-                if "loadxmlconfig" in fn.lower() and "cmapmanager" in fn.lower() and fs:
+                if ("loadxmlconfig" in fn.lower() and "cmapmanager" in fn.lower()) or "cdeviceconfig" in fn.lower() or "mainloadingdeviceconfig" in fn.lower():
+                    if fs:
                     off=fa-textbase
                     for ins in md.disasm(text[off:off+fs],fa):
                         out.append(f"  {ins.address:08x}: {ins.mnemonic:8} {ins.op_str}")
