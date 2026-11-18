@@ -119,7 +119,11 @@ jobs:
             echo '=== PUBLIC RESOURCE IDS ==='
             grep -RniE 'name="[^"]*(icon|logo)[^"]*"' decoded/res/values* 2>/dev/null | head -250 || true
             echo '=== AAPT RESOURCE TABLE APP ICON ==='
-            aapt dump resources input/original.apk 2>&1 | grep -A18 -B5 -E 'drawable/app_icon|app_icon' | head -120 || true
+            (aapt dump resources input/original.apk 2>&1 || true) > output/aapt-resources.txt
+            grep -A24 -B8 -E 'drawable/app_icon|app_icon|0x7f070062' output/aapt-resources.txt | head -180 || true
+            echo '=== AAPT2 RESOURCE TABLE APP ICON ==='
+            (aapt2 dump resources input/original.apk 2>&1 || true) > output/aapt2-resources.txt
+            grep -A24 -B8 -E 'drawable/app_icon|app_icon|0x7f070062' output/aapt2-resources.txt | head -180 || true
             echo '=== RAW APK RES ENTRY NAMES ==='
             python - <<'PY'
           import zipfile
@@ -147,6 +151,8 @@ jobs:
             output/manifest.xml
             output/inspection.json
             output/icon-resource-map.txt
+            output/aapt-resources.txt
+            output/aapt2-resources.txt
             input/user-icon.png
             output/native/*
           if-no-files-found: error
