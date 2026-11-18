@@ -76,6 +76,7 @@ jobs:
               -postScript FindFpsStringXrefs.java "reports/fps-xrefs-$ABI.txt" \
               -postScript TraceFpsControlData.java "reports/fps-control-trace-$ABI.txt" \
               -postScript DumpFunctionBytes.java "reports/fps-function-bytes-$ABI.txt" \
+              -postScript FindGraphicsSyncCalls.java "reports/graphics-sync-audit-$ABI.txt" \
               -analysisTimeoutPerFile 900
           done
 
