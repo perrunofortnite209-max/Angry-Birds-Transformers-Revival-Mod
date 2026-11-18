@@ -19,6 +19,7 @@ CATEGORIES = {
 FOCUS = [
     re.compile(p, re.I) for p in (
         r"CApp.*ProcessFrame",
+        r"CApp.*DoRender",
         r"CGame.*RenderFrame",
         r"CRenderManager.*RenderFrame",
         r"CApp.*DoPresent",
@@ -128,14 +129,15 @@ def main():
                 if ("frame_pacing" in item[3] or "rendering" in item[3]) and base <= item[0] < base + len(text) and (item[0], item[1]) not in used:
                     selected.append(item)
                     used.add((item[0], item[1]))
-            lines.append("\nFOCUSED DISASSEMBLY (up to 8 functions, 0x300 bytes each):")
-            console.append("\nFocused disassembly (up to 8 functions, 0x300 bytes each):")
+            lines.append("\nFOCUSED DISASSEMBLY (render functions up to 0x800 bytes; others 0x300):")
+            console.append("\nFocused disassembly (render functions up to 0x800 bytes; others 0x300):")
             for addr, name, size, cats in selected:
                 header = f"\n{name} @0x{addr:x} size=0x{size:x} [{','.join(cats)}]"
                 lines.append(header)
                 console.append(header)
                 off = addr - base
-                instructions = list(md.disasm(text[off:off + min(size, 0x300)], addr))
+                limit = 0x800 if ("DoRender" in name or "RenderFrame" in name) else 0x300
+                instructions = list(md.disasm(text[off:off + min(size, limit)], addr))
                 for ins in instructions:
                     row = f"  {ins.address:08x}: {ins.mnemonic:8} {ins.op_str}"
                     if ins.mnemonic == "bl" and ins.operands and ins.operands[0].type == 2:
