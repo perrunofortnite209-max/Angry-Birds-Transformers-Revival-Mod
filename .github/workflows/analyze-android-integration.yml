@@ -62,6 +62,11 @@ jobs:
           bash tools/analyze_android_integration.sh "$APK_FILE" reports
           cat reports/android-integration-report.txt
 
+      - name: Map native frontend screens and button actions
+        run: |
+          set -euo pipefail
+          python3 tools/summarize_xgs_ui.py "$RUNNER_TEMP/xgs-ui-extracted" reports/xgs-ui-screen-map.txt
+
       - name: Upload text-only diagnostics
         uses: actions/upload-artifact@v4
         with:
