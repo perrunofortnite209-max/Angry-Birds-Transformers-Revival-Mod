@@ -118,6 +118,16 @@ jobs:
             grep -RniE 'app_icon|ic_launcher|android:icon|mipmap.*icon|drawable.*icon' decoded/res decoded/AndroidManifest.xml | head -250 || true
             echo '=== PUBLIC RESOURCE IDS ==='
             grep -RniE 'name="[^"]*(icon|logo)[^"]*"' decoded/res/values* 2>/dev/null | head -250 || true
+            echo '=== AAPT RESOURCE TABLE APP ICON ==='
+            aapt dump resources input/original.apk 2>&1 | grep -A18 -B5 -E 'drawable/app_icon|app_icon' | head -120 || true
+            echo '=== RAW APK RES ENTRY NAMES ==='
+            python - <<'PY'
+          import zipfile
+          z=zipfile.ZipFile('input/original.apk')
+          for n in z.namelist():
+              if n.startswith('res/'):
+                  print(n)
+          PY
             echo '=== RAW APK ENTRIES THAT MAY BE ICONS ==='
             python - <<'PY'
           import zipfile
