@@ -70,6 +70,11 @@ def main():
         for cat, count in counts.most_common():
             lines.append(f"  {cat}: {count}")
             console.append(f"  {cat}: {count}")
+        resolution_rx = re.compile(r"resolution|viewport|surface|display|framebuffer|render.?target|render.?size|screen.?size|egl|swapchain|buffergeometry|set.*size|set.*viewport|set.*resolution", re.I)
+        resolution_candidates = [(addr, name, size) for addr, (name, size) in all_named.items() if resolution_rx.search(name)]
+        lines.append("\\nRESOLUTION / VIEWPORT / SURFACE CANDIDATES (static leads only):")
+        for addr, name, size in sorted(resolution_candidates, key=lambda x: (-x[2], x[1]))[:220]:
+            lines.append(f"0x{addr:x} size=0x{size:x} {name}")
         ranked = sorted(
             [(addr, name, size, cats) for (addr, name), (size, cats) in symbols.items()],
             key=lambda x: (0 if "frame_pacing" in x[3] else 1 if "rendering" in x[3] else 2,
