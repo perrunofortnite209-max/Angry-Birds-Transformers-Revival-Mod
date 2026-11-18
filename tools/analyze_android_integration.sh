@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# XGS extraction validation is part of this diagnostic workflow.
 # Exient XGS PAK research: inspect real APK headers before selecting XPK1/XPK2 extraction.
 # Public format reference: https://github.com/WerWolv/ImHex-Patterns/blob/master/patterns/xgspak.hexpat
 set -euo pipefail
