@@ -26,6 +26,10 @@ def main():
         "XGS STATIC SYMBOL TRIAGE — no runtime timings or FPS measurements",
         "Interpret symbol names as leads only; confirm callers and runtime behavior before patching.",
     ]
+    console = [
+        "=== XGS PERFORMANCE TRIAGE (STATIC; NOT RUNTIME PROFILING) ===",
+        "Names are search leads, not proof of hot paths or bottlenecks.",
+    ]
     with args.elf.open("rb") as f:
         elf = ELFFile(f)
         lines.append(f"ELF class={elf.elfclass} machine={elf.header['e_machine']} endian={elf.little_endian}")
@@ -44,8 +48,11 @@ def main():
         counts = Counter(cat for _, cats in symbols.values() for cat in cats)
         lines.append(f"Total unique named functions matching categories: {len(symbols)}")
         lines.append("Category counts (a function may count in multiple categories):")
+        console.append(f"Matching named functions: {len(symbols)}")
+        console.append("Category counts:")
         for cat, count in counts.most_common():
             lines.append(f"  {cat}: {count}")
+            console.append(f"  {cat}: {count}")
         ranked = sorted(
             [(addr, name, size, cats) for (addr, name), (size, cats) in symbols.items()],
             key=lambda x: (0 if "frame_pacing" in x[3] else 1 if "rendering" in x[3] else 2,
@@ -54,27 +61,39 @@ def main():
         lines.append("\nNAMED FUNCTION CANDIDATES (first 220; address, size, category):")
         for addr, name, size, cats in ranked[:220]:
             lines.append(f"0x{addr:x} size=0x{size:x} [{','.join(cats)}] {name}")
+        console.append("\nTop 60 named candidates (address, size, category):")
+        for addr, name, size, cats in ranked[:60]:
+            console.append(f"0x{addr:x} size=0x{size:x} [{','.join(cats)}] {name}")
         textsec = elf.get_section_by_name(".text")
         if textsec:
             md = Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN)
             text = textsec.data()
             base = int(textsec.header.sh_addr)
-            # Disassemble a bounded sample of the largest frame/render candidates only.
             selected = [
                 item for item in ranked
                 if ("frame_pacing" in item[3] or "rendering" in item[3])
                 and base <= item[0] < base + len(text)
             ][:24]
             lines.append("\nBOUNDED DISASSEMBLY SAMPLE (up to 24 functions, 0x180 bytes each):")
-            for addr, name, size, cats in selected:
+            console.append("\nDisassembly sample (up to 8 frame/render candidates, 0x80 bytes each):")
+            for idx, (addr, name, size, cats) in enumerate(selected):
                 lines.append(f"\nFUNCTION {name} @0x{addr:x} size=0x{size:x} categories={','.join(cats)}")
                 off = addr - base
-                for ins in md.disasm(text[off:off + min(size, 0x180)], addr):
+                instructions = list(md.disasm(text[off:off + min(size, 0x180)], addr))
+                for ins in instructions:
                     lines.append(f"  {ins.address:08x}: {ins.mnemonic:8} {ins.op_str}")
+                if idx < 8:
+                    console.append(f"\n{name} @0x{addr:x} size=0x{size:x} [{','.join(cats)}]")
+                    for ins in instructions:
+                        if ins.address >= addr + 0x80:
+                            break
+                        console.append(f"  {ins.address:08x}: {ins.mnemonic:8} {ins.op_str}")
         else:
             lines.append("WARNING: .text section not found")
+            console.append("WARNING: .text section not found")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"Wrote {len(lines)} lines; {len(symbols)} unique matching symbols")
+    print("\n".join(console))
 if __name__ == "__main__":
     main()
