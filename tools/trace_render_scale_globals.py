@@ -166,6 +166,38 @@ if ro:
         if any(k in s.lower() for k in ("render", "scale", "resolution", "debugfloat", "debug_float")):
             lines.append(f".rodata {va + m.start():#x}: {s}")
 
+
+# Search packaged XML/JSON/config resources for the debug-float enum mapping.
+# The render manager reads enum indices 0 and 1; resource names/metadata may
+# identify those entries without guessing at native enum labels.
+with zipfile.ZipFile(apk) as z:
+    lines += ["", "## APK resources mentioning debug floats or render scaling"]
+    needles = (b"GetDebugFloat", b"EDebugSetting_Float", b"RENDER_SCALE_X",
+               b"RENDER_SCALE_Y", b"DEVICE_CONFIG_SCALING", b"debugfloat",
+               b"debug_float", b"render_scale")
+    count = 0
+    for info in z.infolist():
+        name = info.filename.lower()
+        if info.is_dir() or info.file_size > 8 * 1024 * 1024:
+            continue
+        if not (name.endswith((".xml", ".json", ".ini", ".cfg", ".txt", ".lua")) or
+                "debug" in name or "tweak" in name or "config" in name):
+            continue
+        try:
+            payload = z.read(info)
+        except Exception:
+            continue
+        hits = [n for n in needles if n.lower() in payload.lower()]
+        if hits:
+            lines.append(f"{info.filename}: hits={','.join(n.decode('ascii') for n in hits)}")
+            for needle in hits:
+                pos = payload.lower().find(needle.lower())
+                excerpt = payload[max(0,pos-160):min(len(payload),pos+320)]
+                lines.append("  " + excerpt.decode("utf-8", "replace").replace("\\n"," ")[:500])
+            count += 1
+            if count >= 80:
+                break
+
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text("\n".join(lines) + "\n", encoding="utf-8")
 print(f"Wrote {out}")
