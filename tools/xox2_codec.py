@@ -317,7 +317,7 @@ def decode(data: bytes) -> str:
     flush()
     if any(not value for value in used):
         missing = [i for i, value in enumerate(used) if not value]
-        raise XOX2Error(f"unused strings in generated table: {missing[:8]}")
+        raise XOX2Error(f"unused strings in generated table: {[(i, strings[i]) for i in missing[:8]]}")
     decoded = "".join(out)
     if not decoded.startswith("<XOX2ROOT>") or not decoded.endswith("</XOX2ROOT>"):
         raise XOX2Error("missing native XOX2 wrapper")
