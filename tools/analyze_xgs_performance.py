@@ -21,7 +21,7 @@ FOCUS = [
         r"_ZN4CApp12ProcessFrameEv",
         r"_ZN4CApp8DoRenderEv",
         r"_ZN5CGame11RenderFrameEv",
-        r"_ZN13CRenderManager11RenderFrameEv",
+        r"_ZN14CRenderManager11RenderFrameEv",
         r"_ZN4CApp9DoPresentEv",
         r"_ZN4CApp19GetDesiredFramerateEv",
         r"_ZN13CDeviceConfig19GetDesiredFramerateEv",
