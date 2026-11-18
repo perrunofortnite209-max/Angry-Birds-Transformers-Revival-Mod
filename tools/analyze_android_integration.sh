@@ -41,6 +41,24 @@ REPORT="$OUT/android-integration-report.txt"
       stat -c 'size_bytes=%s' "$asset" || true
       file "$asset" || true
       od -An -tx1 -N48 "$asset" 2>/dev/null || true
+      if [[ "${asset,,}" == *.pak ]]; then
+        python3 - "$asset" <<'PYPAK'
+import os, struct, sys
+path = sys.argv[1]
+with open(path, "rb") as f:
+    h = f.read(20)
+if len(h) >= 20 and h[0] <= 2 and h[1:4] == b"KPX":
+    version = h[0]
+    folders, files, table_size = struct.unpack_from("<III", h, 4)
+    compression = struct.unpack_from("<I", h, 16)[0] if version == 2 else None
+    labels = {0: "raw", 1: "zlib", 2: "LZ4"}
+    print(f"xgs_header=version{version} magic=KPX folders={folders} files={files} content_table_bytes={table_size}")
+    if compression is not None:
+        print(f"xgs_compression={compression} ({labels.get(compression, 'unknown')})")
+else:
+    print("xgs_header=unclassified (do not assume XPK variant)")
+PYPAK
+      fi
       if [[ "${asset,,}" == *.manifest ]]; then
         head -c 12000 "$asset" 2>/dev/null || true
         echo
