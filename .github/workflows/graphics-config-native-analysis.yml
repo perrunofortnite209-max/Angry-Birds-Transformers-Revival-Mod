@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install ELF analysis dependencies
-        run: python -m pip install pyelftools capstone
+        run: python -m pip install pyelftools capstone lz4
       - name: Download and verify original APK privately
         env:
           GH_TOKEN: ${{ github.token }}
@@ -64,6 +64,20 @@ jobs:
           Path(report).write_text("\n".join(rows) + "\n", encoding="utf-8")
           print("\n".join(rows))
           PY
+      - name: Extract and inspect deviceconfigs.pak
+        run: |
+          python - "$APK" "$RUNNER_TEMP/out/deviceconfigs-extracted" "$RUNNER_TEMP/out/deviceconfigs-report.txt" <<'PY'
+          import sys, zipfile
+          from pathlib import Path
+          sys.path.insert(0, "tools")
+          from extract_xgs_pak import parse_pak
+          apk, out_dir, report = sys.argv[1:]
+          with zipfile.ZipFile(apk) as z:
+              blob = z.read("assets/data/deviceconfigs.pak")
+          lines = parse_pak(blob, "assets/data/deviceconfigs.pak", out_dir)
+          Path(report).write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("\n".join(lines[:120]))
+          PY
       - name: Upload text report
         uses: actions/upload-artifact@v4
         with:
@@ -75,5 +89,7 @@ jobs:
             ${{ runner.temp }}/out/render-scale-global-references.txt
             ${{ runner.temp }}/out/explosion-particle-hotspots.txt
             ${{ runner.temp }}/out/pak-inventory.txt
+            ${{ runner.temp }}/out/deviceconfigs-report.txt
+            ${{ runner.temp }}/out/deviceconfigs-extracted/**
           if-no-files-found: error
           retention-days: 7
