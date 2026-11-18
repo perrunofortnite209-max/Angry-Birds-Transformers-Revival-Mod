@@ -31,6 +31,11 @@ def load_patch(repo):
  spec=importlib.util.spec_from_file_location("abt_visual_helpers",p)
  mod=importlib.util.module_from_spec(spec); sys.modules[spec.name]=mod; spec.loader.exec_module(mod)
  return mod.patch_welcome
+def load_controls(repo):
+ p=repo/"tools/patch_revival_controls.py"
+ spec=importlib.util.spec_from_file_location("abt_revival_controls",p)
+ mod=importlib.util.module_from_spec(spec); sys.modules[spec.name]=mod; spec.loader.exec_module(mod)
+ return mod.patch
 def patch_lib(path, data, report):
  b=bytearray(data)
  for fn,sighex,off,oldhex,newhex in TARGETS[path]:
@@ -73,16 +78,19 @@ def is_sig(n):
  return u.startswith("META-INF/") and (u.endswith((".RSA",".DSA",".EC",".SF")) or u=="META-INF/MANIFEST.MF")
 def main():
  ap=argparse.ArgumentParser()
- ap.add_argument("--apk",type=Path,required=True); ap.add_argument("--out",type=Path,required=True); ap.add_argument("--repo",type=Path,default=Path(".")); ap.add_argument("--icon",type=Path,required=True)
+ ap.add_argument("--apk",type=Path,required=True); ap.add_argument("--out",type=Path,required=True); ap.add_argument("--repo",type=Path,default=Path(".")); ap.add_argument("--icon",type=Path,required=True); ap.add_argument("--native-arm64",type=Path,required=True); ap.add_argument("--native-armv7",type=Path,required=True)
  a=ap.parse_args(); a.out.parent.mkdir(parents=True,exist_ok=True)
  src=a.apk.read_bytes()
  if sha(src)!=EXPECTED: raise RuntimeError("El APK de entrada no coincide con el original 2.42.0 analizado")
- report={"method":"DEX transplant + guarded native FPS patch","target_fps":144,"pak_modified":False,"manifest_modified":True,"resources_modified":True,"icon_safe_scale":1.0,"icon_entries":[],"welcome_first_launch":True,"fps_patches":[]}
+ report={"method":"DEX transplant + runtime FPS/graphics JNI bridge","target_fps":"user-selectable","pak_modified":False,"manifest_modified":True,"resources_modified":True,"icon_safe_scale":1.0,"icon_entries":[],"welcome_first_launch":True,"fps_patches":[]}
  welcome=load_patch(a.repo.resolve())
+ controls=load_controls(a.repo.resolve())
+ native_payloads={"lib/arm64-v8a/libabtmod.so":a.native_arm64.read_bytes(),"lib/armeabi-v7a/libabtmod.so":a.native_armv7.read_bytes()}
  with tempfile.TemporaryDirectory(prefix="abt-combined-") as td:
   td=Path(td); decoded=td/"decoded"; rebuilt=td/"rebuilt.apk"
   run(["apktool","d","-f",str(a.apk),"-o",str(decoded)])
   welcome(decoded,report)
+  controls(decoded,report)
   manifest_path=decoded/"AndroidManifest.xml"
   tree=ET.parse(manifest_path); root=tree.getroot()
   android="{http://schemas.android.com/apk/res/android}"
@@ -121,6 +129,9 @@ def main():
       payload=make_icon_payload(a.icon,w,h)
       report["icon_entries"].append({"path":n,"width":w,"height":h,"verified":True})
      out.writestr(info,payload)
+    for native_name,native_data in native_payloads.items():
+     out.writestr(native_name,native_data,compress_type=zipfile.ZIP_STORED)
+   report["native_bridge_entries"]={name:{"size":len(data),"sha256":sha(data)} for name,data in native_payloads.items()}
   with zipfile.ZipFile(a.out) as check:
    bad=check.testzip()
    if bad: raise RuntimeError(f"ZIP dañado: {bad}")
@@ -132,6 +143,8 @@ def main():
      # Each target instruction was verified before writing; report includes exact resulting bytes.
      match=next(x for x in report["fps_patches"] if x["library"]==p and x["function"]==fn)
      if entry[int(match["offset"],16):int(match["offset"],16)+4]!=bytes.fromhex(new): raise RuntimeError(f"FPS patch no persistió: {fn}")
+   for native_name,native_data in native_payloads.items():
+    if check.read(native_name)!=native_data: raise RuntimeError(f"Native bridge mismatch: {native_name}")
    report["unchanged_entries"]=len(before); report["pak_and_unrelated_entries_sha256_identical"]=True; report["only_resource_changes_are_launcher_icon_pngs"]=True; report["apk_zip_test"]="passed"
  report["output_sha256"]=sha(a.out.read_bytes()); report["output_size"]=a.out.stat().st_size
  rp=a.out.parent/"ABT-REVIVAL-COMBINED.report.json"; rp.write_text(json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
