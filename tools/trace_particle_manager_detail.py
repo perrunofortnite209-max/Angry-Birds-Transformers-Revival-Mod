@@ -57,3 +57,5 @@ for sec in elf.iter_sections():
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text("\n".join(lines)+"\n", encoding="utf-8")
 print(f"Wrote {out}; selected_symbols={len(symbols)}")
+
+# Analysis entrypoint: invoked by graphics-config-native-analysis.yml.
