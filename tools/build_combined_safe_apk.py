@@ -45,15 +45,25 @@ def patch_lib(path, data, report):
   if bytes(b[at:at+4])!=new: raise RuntimeError(f"Verificación fallida: {fn}")
   report["fps_patches"].append({"library":path,"function":fn,"offset":hex(at),"before":oldhex,"after":newhex,"verified":True})
  return bytes(b)
+ICON_ENTRIES = {
+ "res/aH.png",   # default
+ "res/4W.png",   # ldpi
+ "res/uI.png",   # mdpi
+ "res/5J.png",   # hdpi
+ "res/_X.png",   # xhdpi
+ "res/pr.png",   # xxhdpi
+ "res/ad.png",   # xxxhdpi
+}
 def make_icon_payload(source_png, width, height):
  from PIL import Image
  src=Image.open(source_png).convert('RGBA')
  canvas=Image.new('RGBA',(width,height),(0,0,0,255))
- src.thumbnail((max(1,int(width*0.66)),max(1,int(height*0.66))),Image.Resampling.LANCZOS)
+ # Fit the complete artwork inside the original launcher-icon dimensions; never crop or zoom.
+ src.thumbnail((width,height),Image.Resampling.LANCZOS)
  canvas.alpha_composite(src,((width-src.width)//2,(height-src.height)//2))
  out=io.BytesIO(); canvas.save(out,format='PNG',optimize=False); return out.getvalue()
 def is_icon(n):
- return bool(re.fullmatch(r'res/drawable(?:-[^/]+)?/app_icon[.]png',n))
+ return n in ICON_ENTRIES
 def is_dex(n):
  x=Path(n).name
  return x=="classes.dex" or (x.startswith("classes") and x.endswith(".dex"))
@@ -66,7 +76,7 @@ def main():
  a=ap.parse_args(); a.out.parent.mkdir(parents=True,exist_ok=True)
  src=a.apk.read_bytes()
  if sha(src)!=EXPECTED: raise RuntimeError("El APK de entrada no coincide con el original 2.42.0 analizado")
- report={"method":"DEX transplant + guarded native FPS patch","target_fps":144,"pak_modified":False,"manifest_modified":False,"resources_modified":True,"icon_safe_scale":0.66,"icon_entries":[],"welcome_first_launch":True,"fps_patches":[]}
+ report={"method":"DEX transplant + guarded native FPS patch","target_fps":144,"pak_modified":False,"manifest_modified":False,"resources_modified":True,"icon_safe_scale":1.0,"icon_entries":[],"welcome_first_launch":True,"fps_patches":[]}
  welcome=load_patch(a.repo.resolve())
  with tempfile.TemporaryDirectory(prefix="abt-combined-") as td:
   td=Path(td); decoded=td/"decoded"; rebuilt=td/"rebuilt.apk"
