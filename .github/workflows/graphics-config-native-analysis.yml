@@ -43,6 +43,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-graphics-config-xrefs
-          path: "$RUNNER_TEMP/out/graphics-config-xrefs.txt"
+          path: ${{ runner.temp }}/out/graphics-config-xrefs.txt
           if-no-files-found: error
           retention-days: 7
