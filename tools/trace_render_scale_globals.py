@@ -117,6 +117,17 @@ for i, ins in enumerate(insns):
         if nxt.mnemonic in ("bl", "blr", "b", "ret"):
             break
     lines.append(f"ADRP {ins.address:#x} page={page:#x} reg={reg}: " + " | ".join(seq))
+# Dump full debug XML parser and config loading routines when symbols are available.
+lines += ["", "## Full configuration parser and device-config loader"]
+for start, end, name in symbols:
+    if ("SetDebugTweakablesFromXML" in name or "LoadDeviceSpecific" in name or
+            "LoadDeviceConfigFile" in name or "LoadDeviceConfigByPerformance" in name):
+        if end - start > 0x5000:
+            end = start + 0x5000
+        lines.append(f"\\n### {name} [{start:#x}-{end:#x}]")
+        for ins in md.disasm(code[start-base:end-base], start):
+            lines.append(f"{ins.address:08x}: {ins.mnemonic:<8} {ins.op_str}")
+
 # Resolve which ELF section contains each relocation place and the target global.
 lines += ["", "## Relocation slot section mapping"]
 for slot, desc in sorted(relocation_slots.items()):
@@ -130,7 +141,9 @@ for slot, desc in sorted(relocation_slots.items()):
 # actionable without guessing at a callable ABI or patching native code.
 lines += ["", "## Focused function disassembly"]
 focus_addresses = [0x6e7294, 0x484d34, 0x483f80, 0x48354c, 0x4832e4,
-                   0x6ebcac, 0x6ec380, 0x6ed26c, 0x6ed4b8, 0x710dc4, 0x711300, 0x711598, 0x7115a8, 0x7115b8]
+                   0x6ebcac, 0x6ec380, 0x6ed26c, 0x6ed4b8, 0x6edd20,
+                   0x6eda50, 0x710dc4, 0x7111bc, 0x711300, 0x711834,
+                   0x7119d8, 0x711598, 0x7115a8, 0x7115b8]
 symtab = elf.get_section_by_name(".symtab")
 symbols = []
 if symtab:
@@ -144,7 +157,7 @@ for addr in focus_addresses:
     if owner:
         start, end, name = owner
         # Bound output to the owning function and avoid oversized functions.
-        end = min(end, start + 0x500)
+        end = min(end, start + (0x1800 if 'SetDebugTweakablesFromXML' in name else 0x1000 if 'LoadDeviceConfigFile' in name else 0x500))
         label = f"{name} [{start:#x}-{end:#x}]"
     else:
         start, end, label = max(base, addr - 0x80), min(base + len(code), addr + 0x180), "<no containing symbol>"
@@ -223,7 +236,7 @@ for i, ins in enumerate(insns):
         continue
     reg = ins.reg_name(ins.operands[0].reg)
     page = int(ins.operands[1].imm)
-    if page != 0xd410000:
+    if page != 0xd41000:
         continue
     for nxt in insns[i+1:i+12]:
         if nxt.mnemonic in ("bl", "blr", "b", "ret"):
