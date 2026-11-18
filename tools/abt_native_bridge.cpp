@@ -39,25 +39,36 @@ static int set_graphics(uintptr_t base, int target) {
     if (target < 0 || target > 3) return -1;
 
     int current = current_graphics(base);
-    if (current < 0 || current > 3) return -2;
+    if (current < 0 || current > 4) return -2;
     if (current == target) return target + 1;
 
-    // ChangePerformance moves exactly one adjacent profile per call. Use the
-    // engine's own transition path repeatedly so every target (including a
-    // jump from Low directly to Extra High) is reached and the renderer is
-    // refreshed at each successful step.
+    // Native ChangePerformance treats the special value 4 as an effective
+    // starting profile 1, but keeps the global value at 4 until a transition
+    // succeeds. Normalize it through the engine's own adjacent transitions:
+    // 4 -> 0/2/3, and 4 -> 1 via 2 -> 1.
     using ChangePerformance = int (*)(int);
     auto change = reinterpret_cast<ChangePerformance>(base + 0x6ed4b8);
+    if (current == 4) {
+        current = 1; // exact normalization performed by ChangePerformance
+        if (target == 1) {
+            const int up = change(1);
+            if (up != 1 || current_graphics(base) != 2) return -3;
+            const int down = change(-1);
+            if (down != 1 || current_graphics(base) != 1) return -4;
+            return 2; // 1-based success code for manual Medium
+        }
+    }
+
     for (int step = 0; step < 3 && current != target; ++step) {
         const int direction = target > current ? 1 : -1;
         const int changed = change(direction);
-        if (changed != 1) return -3;
+        if (changed != 1) return -5;
         const int updated = current_graphics(base);
-        if (updated != current + direction) return -4;
+        if (updated != current + direction) return -6;
         current = updated;
     }
 
-    return current == target ? target + 1 : -5;
+    return current == target ? target + 1 : -7;
 }
 
 } // namespace
@@ -92,8 +103,11 @@ extern "C" JNIEXPORT jint JNICALL
 Java_com_rovio_angrybirdstransformers_RevivalNative_changeGraphics(JNIEnv *, jclass, jint direction) {
     const uintptr_t base = abbs_base();
     if (!base) return -2;
+    if (direction != -1 && direction != 1) return -1;
     const int current = current_graphics(base);
-    return set_graphics(base, current + direction);
+    if (current < 0 || current > 4) return -3;
+    const int effective = current == 4 ? 1 : current;
+    return set_graphics(base, effective + direction);
 }
 
 extern "C" JNIEXPORT jint JNICALL
@@ -118,16 +132,7 @@ Java_com_rovio_angrybirdstransformers_RevivalNative_setGraphicsLevel(JNIEnv *, j
     if (target < 0 || target > 3) return -1;
     const uintptr_t base = abbs_base();
     if (!base) return -2;
-    int current = current_graphics(base);
-    if (current < 0 || current > 4) return -3;
-    for (int attempt = 0; attempt < 5 && current != target; ++attempt) {
-        const int before = current;
-        const int direction = target > current ? 1 : -1;
-        if (set_graphics(base, current + direction) <= 0) return -4;
-        current = current_graphics(base);
-        if (current == before) return -5;
-    }
-    return current == target ? current + 1 : -6; // 1..4 = successfully applied profile
+    return set_graphics(base, target); // 1..4 = successfully applied profile
 }
 
 #else
