@@ -7,31 +7,53 @@
     "enabled": true,
     "title": "Angry Birds Transformers Revival Mod",
     "message": "Bienvenido a mi mod de Angry Birds Transformers con soporte para teléfonos modernos. Desbloqueo FPS hasta 144 Hz. ¡Disfrútalo!",
-    "status": "planned"
-  },
-  "floatingPanel": {
-    "enabled": true,
-    "draggable": true,
-    "rememberPosition": true,
-    "status": "planned"
+    "status": "planned",
+    "firstLaunchOnly": true,
+    "dismissible": true
   },
   "frameRate": {
     "default": "system",
-    "choices": [30, 60, 90, 120, 144],
+    "choices": [
+      30,
+      60,
+      90,
+      120,
+      144
+    ],
     "availabilityPolicy": "only-offer-device-and-engine-validated-modes",
-    "fallbackFps": [60, 30],
+    "fallbackFps": [
+      60,
+      30
+    ],
     "status": "planned"
   },
   "graphics": {
     "defaultProfile": "original",
-    "textureQuality": ["original", "reduced"],
-    "effects": ["original", "reduced"],
-    "shadows": ["original", "reduced", "off"],
-    "renderScale": ["original", "reduced"],
+    "textureQuality": [
+      "original",
+      "reduced"
+    ],
+    "effects": [
+      "original",
+      "reduced"
+    ],
+    "shadows": [
+      "original",
+      "reduced",
+      "off"
+    ],
+    "renderScale": [
+      "original",
+      "reduced"
+    ],
     "status": "research"
   },
   "display": {
-    "sync": ["system-default", "on", "off"],
+    "sync": [
+      "system-default",
+      "on",
+      "off"
+    ],
     "requestSupportedRefreshRate": true,
     "status": "research"
   },
@@ -46,5 +68,15 @@
     "MediaTek",
     "Samsung Exynos",
     "Other Android-compatible ARM SoCs"
-  ]
+  ],
+  "settingsEntry": {
+    "enabled": true,
+    "screen": "EScreen_FE_Settings",
+    "placement": "same native settings list, after RateGameButton",
+    "label": "MOD SETTINGS",
+    "opens": "mod settings page inside the game UI",
+    "preserveOriginalOptions": true,
+    "floatingOverlay": false,
+    "status": "research"
+  }
 }
