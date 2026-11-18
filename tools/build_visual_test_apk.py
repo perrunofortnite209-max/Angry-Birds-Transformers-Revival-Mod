@@ -168,22 +168,6 @@ def patch_welcome(decoded, report):
     floating_helper=r"""
 .method private showRevivalFloatingBallIfReady()V
     .locals 8
-    const-string v0, "abt_revival_mod"
-    const/4 v1, 0x0
-    invoke-virtual {p0, v0, v1}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
-    move-result-object v0
-    const-string v1, "ball_session_seen"
-    const/4 v2, 0x0
-    invoke-interface {v0, v1, v2}, Landroid/content/SharedPreferences;->getBoolean(Ljava/lang/String;Z)Z
-    move-result v2
-    if-nez v2, :ball_show
-    invoke-interface {v0}, Landroid/content/SharedPreferences;->edit()Landroid/content/SharedPreferences$Editor;
-    move-result-object v3
-    const/4 v2, 0x1
-    invoke-interface {v3, v1, v2}, Landroid/content/SharedPreferences$Editor;->putBoolean(Ljava/lang/String;Z)Landroid/content/SharedPreferences$Editor;
-    move-result-object v3
-    invoke-interface {v3}, Landroid/content/SharedPreferences$Editor;->apply()V
-    return-void
     :ball_show
     invoke-virtual {p0}, Landroid/app/Activity;->getWindow()Landroid/view/Window;
     move-result-object v0
