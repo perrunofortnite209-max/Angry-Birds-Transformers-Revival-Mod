@@ -24,10 +24,18 @@ jobs:
       - name: Checkout development branch
         uses: actions/checkout@v4
 
+      - name: Set up Java for APK decoding
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Install Android inspection tools
         run: |
+          set -euo pipefail
+          java -version
           sudo apt-get update
-          sudo apt-get install -y apktool unzip aapt default-jdk
+          sudo apt-get install -y --no-install-recommends apktool unzip aapt
 
       - name: Download exact original APK privately
         env:
