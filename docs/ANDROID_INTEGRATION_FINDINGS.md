@@ -36,6 +36,17 @@ The APK also contains these relevant packed assets:
 
 These are concrete leads that the game's front-end and settings screens are represented in the native engine/resource system. A string-table hit does not prove a callable API or reveal the scene graph, so no native UI patch has been made yet. Next, inspect the PAK format/manifest and trace the native references and event handlers for the existing front-end settings and main splash screens.
 
+## PAK format research and extraction route
+
+External format research identifies the game's archives as Exient XGS PAK containers, with known XPK1/XPK2 variants. The QuickBMS `xpk2.bms` script explicitly lists Angry Birds among supported XPK2 targets, and the public ImHex `xgspak.hexpat` pattern documents header, folder table, file metadata, string-table offsets, payload offsets, and compression variants (raw, zlib, LZ4).
+
+This is a research lead, not yet proof that every PAK in this exact APK uses the same variant. The next pass must inspect the actual magic/version/endian/compression fields from the APK's own PAK headers before choosing an extractor. Do not reimport or modify any PAK until extraction and round-trip integrity are demonstrated on a disposable copy.
+
+Useful public references:
+- QuickBMS XPK2 script listing: https://aluigi.altervista.org/bms/xpk2.bms
+- ImHex Exient XGS PAK pattern: https://github.com/WerWolv/ImHex-Patterns/blob/master/patterns/xgspak.hexpat
+- Community notes mention a custom KPX header and distinguish APK PAKs from OBB archives.
+
 ## Integration implications
 
 - The requested UI is a button integrated into the game's existing main menu. A floating Android overlay is explicitly out of scope.
