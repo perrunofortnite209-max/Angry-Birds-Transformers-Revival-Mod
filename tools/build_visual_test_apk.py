@@ -364,6 +364,18 @@ def patch_welcome(decoded, report):
  iput-boolean v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->moved:Z
  iget-object v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->hideTask:Ljava/lang/Runnable;
  invoke-virtual {p1, v1}, Landroid/view/View;->removeCallbacks(Ljava/lang/Runnable;)Z
+ iget-object v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+ const-string v2, "abt_revival_mod"
+ const/4 v3, 0x0
+ invoke-virtual {v1, v2, v3}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
+ move-result-object v1
+ const-string v2, "ball_haptics"
+ invoke-interface {v1, v2, v3}, Landroid/content/SharedPreferences;->getBoolean(Ljava/lang/String;Z)Z
+ move-result v1
+ if-eqz v1, :touch_no_haptic
+ const/4 v1, 0x1
+ invoke-virtual {p1, v1}, Landroid/view/View;->performHapticFeedback(I)Z
+ :touch_no_haptic
  const/4 v1, 0x1
  return v1
  :touch_move
@@ -416,10 +428,23 @@ def patch_welcome(decoded, report):
  return-void
 .end method
 .method public run()V
- .locals 2
+ .locals 5
+ iget-object v0, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallHideTask;->ball:Landroid/view/View;
+ invoke-virtual {v0}, Landroid/view/View;->getContext()Landroid/content/Context;
+ move-result-object v1
+ const-string v2, "abt_revival_mod"
+ const/4 v3, 0x0
+ invoke-virtual {v1, v2, v3}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
+ move-result-object v1
+ const-string v2, "auto_hide"
+ const/4 v3, 0x1
+ invoke-interface {v1, v2, v3}, Landroid/content/SharedPreferences;->getBoolean(Ljava/lang/String;Z)Z
+ move-result v1
+ if-eqz v1, :hide_done
  iget-object v0, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallHideTask;->ball:Landroid/view/View;
  const/16 v1, 0x8
  invoke-virtual {v0, v1}, Landroid/view/View;->setVisibility(I)V
+ :hide_done
  return-void
 .end method
 """,
