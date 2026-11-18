@@ -79,7 +79,7 @@ def main():
             report["apk_zip_test"] = "passed"
     report["output_sha256"] = sha(args.out.read_bytes())
     report["output_size"] = args.out.stat().st_size
-    report_path = args.out.with_suffix(".report.json")
+    report_path = args.out.parent / "ABT-DEX-ONLY-DIAGNOSTIC.report.json"
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
     print(json.dumps(report, indent=2, ensure_ascii=False))
 
