@@ -142,3 +142,8 @@ PYPAK
   echo "Selected activity, GL view, XGS activity and renderer smali source files are included in the private diagnostics artifact for integration review; all other decoded resources stay in the runner workspace."
   echo "The private artifact contains text diagnostics, the decoded manifest and selected integration smali files; no APK, textures, audio or other game assets are uploaded."
 } > "$REPORT"
+
+echo >> "$REPORT"
+echo "=== XGS v2/zlib UI PAK extraction and text inventory ===" >> "$REPORT"
+python3 tools/extract_xgs_pak.py "$APK" --out "$RUNNER_TEMP/xgs-ui-extracted" --report "$OUT/xgs-pak-inventory.txt" >> "$REPORT"
+cat "$OUT/xgs-pak-inventory.txt" >> "$REPORT"
