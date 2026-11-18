@@ -39,12 +39,12 @@ def decode_xox2_strings(data):
     for offset in offsets:
         if offset >= len(pool):
             return None
-        end = pool.find(b"\\0", offset)
+        end = pool.find(b"\0", offset)
         if end < 0:
             return None
         raw = pool[offset:end]
         value = raw.decode("utf-8", "replace")
-        if value and any(ord(ch) < 32 and ch not in "\\t" for ch in value):
+        if value and any(ord(ch) < 32 and ch not in "\t" for ch in value):
             return None
         decoded.append(value)
     return decoded
@@ -74,9 +74,9 @@ for path in sorted(root.rglob("*")):
                 rows.append(f"  S{i:04d}: {value[:500]}")
         rows.append("")
     else:
-        text = data.decode("utf-8", "replace").replace("\\x00", "\\n")
+        text = data.decode("utf-8", "replace").replace("\x00", "\n")
         lines = text.splitlines()
-    joined = "\\n".join(lines)
+    joined = "\n".join(lines)
     hits = [term for term in terms if term in joined]
     if not hits:
         continue
@@ -99,5 +99,5 @@ rows.extend(screen_rows or ["No registerScreen strings found."])
 rows.extend(["", "=== FRONTEND / NAVIGATION HINTS ==="])
 rows.extend(nav_rows or ["No navigation hints found."])
 out.parent.mkdir(parents=True, exist_ok=True)
-out.write_text("\\n".join(rows) + "\\n", encoding="utf-8")
+out.write_text("\n".join(rows) + "\n", encoding="utf-8")
 print(f"UI map: {len(rows)} report lines -> {out}")
