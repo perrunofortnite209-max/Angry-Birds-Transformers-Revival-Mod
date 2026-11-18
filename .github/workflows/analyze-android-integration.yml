@@ -26,6 +26,19 @@ jobs:
       - name: Checkout development branch
         uses: actions/checkout@v4
 
+      - name: Checkout verified XOX1/XOX2 decoder
+        uses: actions/checkout@v4
+        with:
+          repository: omonkeyz/angry-birds-go-rust
+          ref: 7cd02d36d42b58b652fdc98848de08221d1a0469
+          path: .tools/angry-birds-go-rust
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build XOX decoder
+        run: cargo build --release --manifest-path .tools/angry-birds-go-rust/abgtool/Cargo.toml
+
       - name: Set up Java for APK decoding
         uses: actions/setup-java@v4
         with:
@@ -60,6 +73,7 @@ jobs:
       - name: Inspect manifest, entry points and dex signatures
         run: |
           set -euo pipefail
+          export ABGTOOL="$GITHUB_WORKSPACE/.tools/angry-birds-go-rust/abgtool/target/release/abgtool"
           bash tools/analyze_android_integration.sh "$APK_FILE" reports
           cat reports/android-integration-report.txt
 
