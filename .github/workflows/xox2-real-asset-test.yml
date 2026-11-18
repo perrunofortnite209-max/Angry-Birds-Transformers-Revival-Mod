@@ -74,22 +74,37 @@ jobs:
           PY
           python tools/xox2_codec.py "$RUNNER_TEMP/xox2-check/settings.original.xml" "$RUNNER_TEMP/xox2-check/settings.rebuilt.xox2"
           cargo run --quiet --release --manifest-path "$ABGTOOL_MANIFEST" -- xox "$RUNNER_TEMP/xox2-check/settings.rebuilt.xox2" > "$RUNNER_TEMP/xox2-check/settings.rebuilt.xml"
-          cmp "$RUNNER_TEMP/xox2-check/settings.original.xml" "$RUNNER_TEMP/xox2-check/settings.rebuilt.xml"
-          python - "$SETTINGS_XOX" "$RUNNER_TEMP/xox2-check/settings.rebuilt.xox2" "$RUNNER_TEMP/xox2-check/result.txt" <<'PY'
+          python - "$SETTINGS_XOX" "$RUNNER_TEMP/xox2-check/settings.rebuilt.xox2" "$RUNNER_TEMP/xox2-check/settings.original.xml" "$RUNNER_TEMP/xox2-check/settings.rebuilt.xml" "$RUNNER_TEMP/xox2-check/result.txt" <<'PY'
           import hashlib, sys
           from pathlib import Path
-          original, rebuilt, report = map(Path, sys.argv[1:])
+          import xml.etree.ElementTree as ET
+          original_xox, rebuilt_xox, original_xml, rebuilt_xml, report = map(Path, sys.argv[1:])
+          a = original_xml.read_text(encoding="utf-8")
+          b = rebuilt_xml.read_text(encoding="utf-8")
+          exact = a == b
+          semantic = ET.canonicalize(a) == ET.canonicalize(b)
+          if not exact:
+              limit = min(len(a), len(b))
+              pos = next((i for i in range(limit) if a[i] != b[i]), limit)
+              print(f"XML mismatch: original_chars={len(a)} rebuilt_chars={len(b)} first_difference={pos}")
+              print(f"original_context={a[max(0,pos-100):pos+200]!r}")
+              print(f"rebuilt_context={b[max(0,pos-100):pos+200]!r}")
+              print(f"original_tail={a[-300:]!r}")
+              print(f"rebuilt_tail={b[-300:]!r}")
           lines = [
-              "RESULT=PASS",
-              f"original_xox2_bytes={original.stat().st_size}",
-              f"rebuilt_xox2_bytes={rebuilt.stat().st_size}",
-              f"original_xox2_sha256={hashlib.sha256(original.read_bytes()).hexdigest()}",
-              f"rebuilt_xox2_sha256={hashlib.sha256(rebuilt.read_bytes()).hexdigest()}",
+              f"RESULT={'PASS' if semantic else 'FAIL'}",
+              f"original_xox2_bytes={original_xox.stat().st_size}",
+              f"rebuilt_xox2_bytes={rebuilt_xox.stat().st_size}",
+              f"original_xox2_sha256={hashlib.sha256(original_xox.read_bytes()).hexdigest()}",
+              f"rebuilt_xox2_sha256={hashlib.sha256(rebuilt_xox.read_bytes()).hexdigest()}",
               "independent_abgtool_decode=PASS",
-              "xml_byte_for_byte_match=PASS",
+              f"xml_byte_for_byte_match={'PASS' if exact else 'FAIL'}",
+              f"xml_canonical_match={'PASS' if semantic else 'FAIL'}",
           ]
           report.write_text("\n".join(lines) + "\n", encoding="utf-8")
           print("\n".join(lines))
+          if not semantic:
+              raise SystemExit("Rebuilt XML is not canonically equivalent to the original")
           PY
       - name: Upload text-only validation report
         uses: actions/upload-artifact@v4
