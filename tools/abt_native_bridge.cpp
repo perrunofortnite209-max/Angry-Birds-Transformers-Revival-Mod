@@ -97,6 +97,23 @@ Java_com_rovio_angrybirdstransformers_RevivalNative_changeGraphics(JNIEnv *, jcl
 }
 
 extern "C" JNIEXPORT jint JNICALL
+Java_com_rovio_angrybirdstransformers_RevivalNative_setPendingGraphicsLevel(JNIEnv *, jclass, jint target) {
+    if (target < 0 || target > 3) return -1;
+    const uintptr_t base = abbs_base();
+    if (!base) return -2;
+    // Override the startup profile getter in CApp::MainLoadingDeviceConfig.
+    // The engine then performs its own LoadDeviceConfigByPerformance call.
+    const uintptr_t site = base + 0x6e3ee8;
+    const uint32_t current = *reinterpret_cast<volatile uint32_t *>(site);
+    if ((current & 0xfc000000U) != 0x94000000U) {
+        const uint32_t expected = 0x52800000U | (static_cast<uint32_t>(target) << 5);
+        return current == expected ? 1 : -3;
+    }
+    const uint32_t replacement = 0x52800000U | (static_cast<uint32_t>(target) << 5);
+    return write_code_word(site, replacement) ? 1 : -4;
+}
+
+extern "C" JNIEXPORT jint JNICALL
 Java_com_rovio_angrybirdstransformers_RevivalNative_setGraphicsLevel(JNIEnv *, jclass, jint target) {
     if (target < 0 || target > 3) return -1;
     const uintptr_t base = abbs_base();
@@ -117,5 +134,6 @@ Java_com_rovio_angrybirdstransformers_RevivalNative_setGraphicsLevel(JNIEnv *, j
 extern "C" JNIEXPORT jint JNICALL Java_com_rovio_angrybirdstransformers_RevivalNative_setFps(JNIEnv *, jclass, jint) { return -9; }
 extern "C" JNIEXPORT jint JNICALL Java_com_rovio_angrybirdstransformers_RevivalNative_getGraphicsLevel(JNIEnv *, jclass) { return -9; }
 extern "C" JNIEXPORT jint JNICALL Java_com_rovio_angrybirdstransformers_RevivalNative_changeGraphics(JNIEnv *, jclass, jint) { return -9; }
+extern "C" JNIEXPORT jint JNICALL Java_com_rovio_angrybirdstransformers_RevivalNative_setPendingGraphicsLevel(JNIEnv *, jclass, jint) { return -9; }
 extern "C" JNIEXPORT jint JNICALL Java_com_rovio_angrybirdstransformers_RevivalNative_setGraphicsLevel(JNIEnv *, jclass, jint) { return -9; }
 #endif
