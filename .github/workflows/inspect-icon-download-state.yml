@@ -1,0 +1,62 @@
+name: Inspect icon dimensions and download completion state
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exact original APK and artwork
+        run: |
+          set -euo pipefail
+          mkdir -p input output/native
+          curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/com.rovio.angrybirdstransformers-24200.apk" -o input/original.apk
+          curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/f3313d17-ccf7-4c82-8007-c68b4233b65d.png" -o input/user-icon.png
+          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  input/original.apk" | sha256sum -c -
+      - name: Inspect launcher PNGs and native download functions
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet pillow
+          python - <<'PY'
+          import zipfile, io, json, pathlib
+          from PIL import Image
+          z=zipfile.ZipFile("input/original.apk")
+          report={"icons":[],"native_libraries":[]}
+          for name in z.namelist():
+              if name.startswith("res/drawable") and name.endswith("/app_icon.png") or name=="res/drawable/app_icon.png":
+                  data=z.read(name)
+                  im=Image.open(io.BytesIO(data)).convert("RGBA")
+                  alpha=im.getchannel("A")
+                  report["icons"].append({"path":name,"width":im.width,"height":im.height,"alpha_bbox":alpha.getbbox(),"bytes":len(data)})
+          for name in z.namelist():
+              if name.startswith("lib/") and name.endswith("/libABBS.so"):
+                  out=pathlib.Path("output/native")/name.replace("/","_")
+                  out.write_bytes(z.read(name))
+                  report["native_libraries"].append({"path":name,"output":str(out),"bytes":len(z.read(name))})
+          pathlib.Path("output/icon_native_report.json").write_text(json.dumps(report,indent=2)+"\n")
+          print(json.dumps(report,indent=2))
+          PY
+          for f in output/native/*.so; do
+            [ -f "$f" ] || continue
+            readelf -Ws "$f" > "${f}.symbols" || true
+          done
+          ARM64=output/native/lib_arm64-v8a_libABBS.so
+          if [ -f "$ARM64" ]; then
+            llvm-objdump -d --demangle --start-address=0x5cfd34 --stop-address=0x5d0274 "$ARM64" > output/process-disassembly.txt
+            llvm-objdump -d --demangle --start-address=0x5d0604 --stop-address=0x5d0760 "$ARM64" > output/installation-disassembly.txt
+            llvm-objdump -d --demangle --start-address=0x5d09e4 --stop-address=0x5d0d50 "$ARM64" > output/check-complete-disassembly.txt
+            llvm-objdump -d --demangle --start-address=0x5d0e44 --stop-address=0x5d0f04 "$ARM64" > output/download-complete-disassembly.txt
+            llvm-objdump -d --demangle --start-address=0x5d13dc --stop-address=0x5d14b8 "$ARM64" > output/update-listener-disassembly.txt
+          fi
+          cp input/user-icon.png output/user-icon.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: abt-icon-download-state-report
+          path: output/
+          if-no-files-found: error
+          retention-days: 7
