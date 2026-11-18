@@ -8,7 +8,7 @@ from xml.etree import ElementTree as ET
 ANDROID = "{http://schemas.android.com/apk/res/android}"
 WELCOME = ("¡Bienvenido a Angry Birds Transformers: Revival Mod! Una versión renovada "
            "para dispositivos Android actuales, con controles de FPS y opciones de "
-           "rendimiento. ¡Prepárate para volver a la batalla!")
+           "rendimiento.")
 
 def load_module(path, name):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -155,7 +155,7 @@ def patch_welcome(decoded, report):
     invoke-direct {v4, p0}, Landroid/app/AlertDialog$Builder;-><init>(Landroid/content/Context;)V
     const-string v1, "Angry Birds Transformers: Revival Mod"
     invoke-virtual {v4, v1}, Landroid/app/AlertDialog$Builder;->setTitle(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
-    const-string v1, "¡Bienvenido a Angry Birds Transformers: Revival Mod! Una versión renovada para dispositivos Android actuales, con controles de FPS y opciones de rendimiento. ¡Prepárate para volver a la batalla!"
+    const-string v1, "¡Bienvenido a Angry Birds Transformers: Revival Mod! Una versión renovada para dispositivos Android actuales, con controles de FPS y opciones de rendimiento."
     invoke-virtual {v4, v1}, Landroid/app/AlertDialog$Builder;->setMessage(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
     const-string v1, "ENTENDIDO"
     const/4 v2, 0x0
