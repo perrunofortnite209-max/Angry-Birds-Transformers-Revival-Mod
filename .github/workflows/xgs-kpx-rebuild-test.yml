@@ -1,0 +1,134 @@
+name: XGS KPX v2 rebuild and XOX2 reintegration test
+
+on:
+  push:
+    branches: [feature/full-revival-mod]
+    paths:
+      - ".github/workflows/xgs-kpx-rebuild-test.yml"
+      - "tools/xgs_kpx_v2.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pak-rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout mod tools
+        uses: actions/checkout@v4
+        with:
+          ref: feature/full-revival-mod
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install archive dependencies
+        run: python -m pip install lz4
+      - name: Download and fingerprint original APK privately
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/private" "$RUNNER_TEMP/paks"
+          gh release download game --repo "$GITHUB_REPOSITORY" --pattern "*.apk" --dir "$RUNNER_TEMP/private"
+          mapfile -t APKS < <(find "$RUNNER_TEMP/private" -maxdepth 1 -type f -name '*.apk')
+          test "${#APKS[@]}" -eq 1
+          APK="${APKS[0]}"
+          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  $APK" | sha256sum -c -
+          python - "$APK" "$RUNNER_TEMP/paks" <<'PY'
+          import sys, zipfile
+          from pathlib import Path
+          apk, out = Path(sys.argv[1]), Path(sys.argv[2])
+          with zipfile.ZipFile(apk) as z:
+              for name in z.namelist():
+                  if name.lower().endswith(".pak"):
+                      data=z.read(name)
+                      if data[:4] == b"\x02KPX":
+                          target=out / (name.replace("/", "_"))
+                          target.write_bytes(data)
+          print("Extracted KPX v2 archives:", len(list(out.glob("*.pak"))))
+          PY
+      - name: Build pinned independent archive and XOX2 decoder
+        run: |
+          set -euo pipefail
+          git clone https://github.com/omonkeyz/angry-birds-go-rust.git "$RUNNER_TEMP/abgtool"
+          git -C "$RUNNER_TEMP/abgtool" checkout 7cd02d36d42b58b652fdc98848de08221d1a0469
+          cargo build --release --manifest-path "$RUNNER_TEMP/abgtool/abgtool/Cargo.toml"
+          echo "ABGTOOL=$RUNNER_TEMP/abgtool/target/release/abgtool" >> "$GITHUB_ENV"
+      - name: Find the settings PAK and validate no-op archive rebuild
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/repack"
+          python - "$RUNNER_TEMP/paks" "$GITHUB_WORKSPACE/tools/xgs_kpx_v2.py" "$RUNNER_TEMP/repack" <<'PY'
+          import subprocess, sys
+          from pathlib import Path
+          paks, tool, out = map(Path, sys.argv[1:])
+          matches=[]
+          for pak in sorted(paks.glob("*.pak")):
+              listing=subprocess.run([sys.executable,str(tool),"list",str(pak)],text=True,capture_output=True)
+              if listing.returncode == 0 and any("uisettingsscreen.xml" in line.lower() for line in listing.stdout.splitlines()):
+                  matches.append((pak,listing.stdout))
+          if len(matches) != 1:
+              raise SystemExit(f"Expected one settings PAK, found {len(matches)}")
+          pak, listing=matches[0]
+          entry=next(line.split()[-1] for line in listing.splitlines() if "uisettingsscreen.xml" in line.lower())
+          rebuilt=out/"pak-roundtrip.pak"
+          subprocess.run([sys.executable,str(tool),"roundtrip",str(pak),str(rebuilt)],check=True)
+          if pak.read_bytes()!=rebuilt.read_bytes():
+              raise SystemExit("No-op archive rebuild changed bytes")
+          (out/"selected-entry.txt").write_text(f"pak={pak.name}\nentry={entry}\n",encoding="utf-8")
+          (out/"pak-list.txt").write_text(listing,encoding="utf-8")
+          (out/"selected-pak.path").write_text(str(pak),encoding="utf-8")
+          (out/"selected-entry.path").write_text(entry,encoding="utf-8")
+          print(f"Selected {pak.name} :: {entry}")
+          PY
+      - name: Rebuild PAK with the independently rebuilt settings XOX2
+        run: |
+          set -euo pipefail
+          PAK="$(cat "$RUNNER_TEMP/repack/selected-pak.path")"
+          ENTRY="$(cat "$RUNNER_TEMP/repack/selected-entry.path")"
+          mkdir -p "$RUNNER_TEMP/unpacked-original" "$RUNNER_TEMP/unpacked-rebuilt" "$RUNNER_TEMP/xox"
+          "$ABGTOOL" unpack "$PAK" "$RUNNER_TEMP/unpacked-original"
+          SOURCE_XML="$(find "$RUNNER_TEMP/unpacked-original" -type f -iname 'uisettingsscreen.xml' -print -quit)"
+          test -n "$SOURCE_XML"
+          "$ABGTOOL" xox "$SOURCE_XML" > "$RUNNER_TEMP/xox/settings.original.xml"
+          python tools/xox2_codec.py "$RUNNER_TEMP/xox/settings.original.xml" "$RUNNER_TEMP/xox/settings.rebuilt.xox2"
+          python tools/xgs_kpx_v2.py replace "$PAK" "$ENTRY" "$RUNNER_TEMP/xox/settings.rebuilt.xox2" "$RUNNER_TEMP/repack/settings-rebuilt.pak"
+          "$ABGTOOL" unpack "$RUNNER_TEMP/repack/settings-rebuilt.pak" "$RUNNER_TEMP/unpacked-rebuilt"
+          REBUILT_XML="$(find "$RUNNER_TEMP/unpacked-rebuilt" -type f -iname 'uisettingsscreen.xml' -print -quit)"
+          test -n "$REBUILT_XML"
+          "$ABGTOOL" xox "$REBUILT_XML" > "$RUNNER_TEMP/xox/settings.after-pak.xml"
+          python - "$RUNNER_TEMP/xox/settings.original.xml" "$RUNNER_TEMP/xox/settings.after-pak.xml" "$RUNNER_TEMP/repack/result.txt" <<'PY'
+          import hashlib, sys
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          a,b,report=map(Path,sys.argv[1:])
+          original=a.read_text(encoding="utf-8")
+          restored=b.read_text(encoding="utf-8")
+          same=ET.canonicalize(original)==ET.canonicalize(restored)
+          lines=[
+            f"RESULT={'PASS' if same else 'FAIL'}",
+            "independent_abgtool_unpack_original=PASS",
+            "independent_abgtool_unpack_rebuilt=PASS",
+            "independent_abgtool_decode_rebuilt_xox2=PASS",
+            f"settings_xml_canonical_match={'PASS' if same else 'FAIL'}",
+            f"original_xml_sha256={hashlib.sha256(original.encode()).hexdigest()}",
+            f"rebuilt_xml_sha256={hashlib.sha256(restored.encode()).hexdigest()}",
+            f"original_xml_bytes={len(original.encode())}",
+            f"rebuilt_xml_bytes={len(restored.encode())}",
+          ]
+          report.write_text("\n".join(lines)+"\n",encoding="utf-8")
+          print("\n".join(lines))
+          if not same: raise SystemExit("Settings XML changed during PAK reintegration")
+          PY
+      - name: Upload text-only PAK validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: xgs-kpx-rebuild-validation
+          path: |
+            ${{ runner.temp }}/repack/result.txt
+            ${{ runner.temp }}/repack/selected-entry.txt
+          if-no-files-found: error
+          retention-days: 7
