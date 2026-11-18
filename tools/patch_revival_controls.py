@@ -27,11 +27,21 @@ def patch(decoded: Path, report: dict):
     if not old: raise RuntimeError("Existing floating-ball settings method not found")
     old_method=old.group(0).replace("showRevivalSettings()V","showRevivalBallOptions()V",1)
     source=source[:old.start()]+old_method+source[old.end():]
+    # Queue the selected graphics profile before native startup continues.
+    oncreate_pattern=re.compile(r"(?ms)^\\.method[^\\n]*\\bonCreate\\(Landroid/os/Bundle;\\)V\\b.*?^\\.end method")
+    oncreate=oncreate_pattern.search(source)
+    if not oncreate: raise RuntimeError("onCreate(Bundle) not found for deferred graphics profile")
+    oncreate_body=oncreate.group(0)
+    if "prepareSavedRevivalGraphics()V" not in oncreate_body:
+        super_call=re.search(r"(?m)^\\s*invoke-super(?:/range)?\\s+\\{[^}]+\\}, [^\\n]*->onCreate\\(Landroid/os/Bundle;\\)V\\s*$",oncreate_body)
+        if not super_call: raise RuntimeError("Could not locate Activity super.onCreate call for graphics startup hook")
+        insertion="\\n    invoke-direct {p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->prepareSavedRevivalGraphics()V"
+        oncreate_body=oncreate_body[:super_call.end()]+insertion+oncreate_body[super_call.end():]
+        source=source[:oncreate.start()]+oncreate_body+source[oncreate.end():]
     # Main menu.
     main=r"""
 .method public showRevivalSettings()V
     .locals 5
-    invoke-direct {p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->applySavedRevivalSettings()V
     new-instance v0, Landroid/app/AlertDialog$Builder;
     invoke-direct {v0, p0}, Landroid/app/AlertDialog$Builder;-><init>(Landroid/content/Context;)V
     const-string v1, "REVIVAL MOD"
@@ -203,9 +213,6 @@ def patch(decoded: Path, report: dict):
     apply_graphics=r"""
 .method public applyRevivalGraphics(I)V
     .locals 5
-    invoke-static {p1}, Lcom/rovio/angrybirdstransformers/RevivalNative;->setGraphicsLevel(I)I
-    move-result v0
-    if-lez v0, :graphics_failed
     const-string v1, "abt_revival_mod"
     const/4 v2, 0x0
     invoke-virtual {p0, v1, v2}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
@@ -217,27 +224,20 @@ def patch(decoded: Path, report: dict):
     move-result-object v1
     invoke-interface {v1}, Landroid/content/SharedPreferences$Editor;->apply()V
     packed-switch p1, :graphics_switch_data
-    const-string v3, "Perfil gráfico aplicado"
+    const-string v3, "Perfil guardado. Reinicia el juego para aplicarlo."
     goto :graphics_toast
     :graphics_low
-    const-string v3, "Calidad baja aplicada"
+    const-string v3, "Calidad baja guardada. Reinicia el juego."
     goto :graphics_toast
     :graphics_medium
-    const-string v3, "Calidad media aplicada"
+    const-string v3, "Calidad media guardada. Reinicia el juego."
     goto :graphics_toast
     :graphics_high
-    const-string v3, "Calidad alta aplicada"
+    const-string v3, "Calidad alta guardada. Reinicia el juego."
     goto :graphics_toast
     :graphics_extra
-    const-string v3, "Calidad extraalta aplicada"
+    const-string v3, "Calidad extraalta guardada. Reinicia el juego."
     :graphics_toast
-    const/4 v2, 0x0
-    invoke-static {p0, v3, v2}, Landroid/widget/Toast;->makeText(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;
-    move-result-object v4
-    invoke-virtual {v4}, Landroid/widget/Toast;->show()V
-    return-void
-    :graphics_failed
-    const-string v3, "El motor no permitió cambiar ese perfil"
     const/4 v2, 0x0
     invoke-static {p0, v3, v2}, Landroid/widget/Toast;->makeText(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;
     move-result-object v4
@@ -256,7 +256,7 @@ def patch(decoded: Path, report: dict):
     for name in ("showRevivalSettings()V","showRevivalFpsDialog()V","showRevivalGraphicsDialog()V","applyRevivalFps(I)V","applyRevivalGraphics(I)V","applySavedRevivalSettings()V"):
         pat=re.compile(r"(?ms)^\.method[^\n]*\b"+re.escape(name)+r".*?^\.end method\n?")
         source=pat.sub("",source)
-    source += "\n"+main+"\n"+fps_dialog+"\n"+graphics_dialog+"\n"+apply_saved+"\n"+apply_fps+"\n"+apply_graphics
+    source += "\n"+main+"\n"+fps_dialog+"\n"+graphics_dialog+"\n"+apply_saved+"\n"+apply_fps+"\n"+apply_graphics+"\n"+prepare
     path.write_text(source,encoding="utf-8")
 
     smali_root=next((p for p in path.parents if p.name.startswith("smali")),None)
@@ -276,6 +276,8 @@ def patch(decoded: Path, report: dict):
 .method public static native getGraphicsLevel()I
 .end method
 .method public static native changeGraphics(I)I
+.end method
+.method public static native setPendingGraphicsLevel(I)I
 .end method
 .method public static native setGraphicsLevel(I)I
 .end method
