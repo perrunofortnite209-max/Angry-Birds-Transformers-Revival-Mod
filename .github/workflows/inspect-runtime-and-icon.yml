@@ -38,6 +38,21 @@ jobs:
         run: |
           set -euo pipefail
           apktool d -f input/original.apk -o decoded
+          mkdir -p output/native
+          python - <<'PY'
+          import zipfile, pathlib
+          z=zipfile.ZipFile("input/original.apk")
+          for n in z.namelist():
+              if n.startswith("lib/") and n.endswith(".so") and ("ABBS" in n or "main" in n.lower()):
+                  p=pathlib.Path("output/native")/n.replace("/","_")
+                  p.write_bytes(z.read(n))
+          print("Native libraries extracted:", *[p.name for p in pathlib.Path("output/native").glob("*")], sep="\\n")
+          PY
+          for f in output/native/*.so; do
+            [ -f "$f" ] || continue
+            strings -a "$f" | grep -Ei 'download|resource|content|pak|asset|bundle|progress|complete|finished|load.*data|data.*load|network' > "${f}.strings" || true
+            readelf -Ws "$f" > "${f}.symbols" || true
+          done
           python - <<'PY'
           from pathlib import Path
           import json, re, xml.etree.ElementTree as ET
@@ -100,5 +115,6 @@ jobs:
             output/manifest.xml
             output/inspection.json
             input/user-icon.png
+            output/native/*
           if-no-files-found: error
           retention-days: 7
