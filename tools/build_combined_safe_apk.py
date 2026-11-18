@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build a safe combined APK: welcome DEX patch + guarded native 144 FPS patch.
-All PAKs, manifest, resources and unrelated APK entries remain byte-identical.
+All PAKs and unrelated APK entries remain byte-identical; only manifest versionCode is bumped for updates.
 """
 from __future__ import annotations
 import argparse, hashlib, importlib.util, io, json, os, re, subprocess, sys, tempfile, zipfile
