@@ -107,7 +107,14 @@ jobs:
                   "Decoder failures are listed rather than silently terminating the scan.",
                   "No game assets or APK files are included in this report."]
           report.write_text("\n".join(out)+"\n")
-          print(f"Decoded XML files: {len(files)}; files with candidate strings: {matched}; decode failures: {len(failed)}")
+          device_dir=report.parent/"deviceconfigs-full"
+          device_dir.mkdir(exist_ok=True)
+          device_files=sorted(root.glob("deviceconfigs__*.decoded"))
+          for path in device_files:
+              (device_dir/(path.name+".xml")).write_text(path.read_text(errors="replace"))
+          (report.parent/"deviceconfigs-index.txt").write_text(
+              "\n".join(f"{p.name}\t{len(p.read_text(errors='replace'))} chars" for p in device_files)+"\n")
+          print(f"Decoded XML files: {len(files)}; files with candidate strings: {matched}; decode failures: {len(failed)}; device profiles: {len(device_files)}")
           if not files: raise SystemExit("No XML files were decoded; inspect archive extraction.")
           PY
       - name: Upload text-only graphics scan report
@@ -117,5 +124,7 @@ jobs:
           path: |
             ${{ runner.temp }}/scan-report.md
             ${{ runner.temp }}/decode-errors.txt
+            ${{ runner.temp }}/deviceconfigs-full/
+            ${{ runner.temp }}/deviceconfigs-index.txt
           if-no-files-found: error
           retention-days: 7
