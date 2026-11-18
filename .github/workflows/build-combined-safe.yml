@@ -32,7 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends curl
+          sudo apt-get install -y --no-install-recommends curl python3-pil
           sdkmanager --install 'build-tools;35.0.0'
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
           curl -fL --retry 3 https://github.com/iBotPeaches/Apktool/releases/download/v2.11.1/apktool_2.11.1.jar -o "$RUNNER_TEMP/apktool.jar"
@@ -47,7 +47,7 @@ jobs:
       - name: Build combined DEX and native patch
         run: |
           set -euo pipefail
-          python tools/build_combined_safe_apk.py --apk input/original.apk --out output/ABT-REVIVAL-COMBINED-unsigned.apk --repo .
+          python tools/build_combined_safe_apk.py --apk input/original.apk --out output/ABT-REVIVAL-COMBINED-unsigned.apk --repo . --icon input/user-icon.png
       - name: Align, sign and verify
         run: |
           set -euo pipefail
