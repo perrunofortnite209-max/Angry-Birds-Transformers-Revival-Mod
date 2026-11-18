@@ -23,11 +23,11 @@ nav_terms = (
 
 def printable_nul_strings(data):
     values = []
-    for raw in data.split(b"\\x00"):
+    for raw in data.split(b"\x00"):
         if not raw:
             continue
         value = raw.decode("utf-8", "replace").strip()
-        if value and not any(ord(ch) < 32 and ch not in "\\t" for ch in value):
+        if value and not any(ord(ch) < 32 and ch not in "\t" for ch in value):
             values.append(value)
     return values
 
@@ -79,7 +79,7 @@ for path in sorted(root.rglob("*")):
         if not lines:
             text = data.decode("utf-8", "replace")
             lines = text.splitlines()
-    joined = "\\n".join(lines)
+    joined = "\n".join(lines)
     hits = [term for term in terms if term in joined]
     if not hits:
         continue
@@ -102,5 +102,5 @@ rows.extend(screen_rows or ["No registerScreen strings found."])
 rows.extend(["", "=== FRONTEND / NAVIGATION HINTS ==="])
 rows.extend(nav_rows or ["No navigation hints found."])
 out.parent.mkdir(parents=True, exist_ok=True)
-out.write_text("\\n".join(rows) + "\\n", encoding="utf-8")
+out.write_text("\n".join(rows) + "\n", encoding="utf-8")
 print(f"UI map: {len(rows)} report lines -> {out}")
