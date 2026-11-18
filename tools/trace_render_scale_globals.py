@@ -210,6 +210,33 @@ for ins in insns:
             for prev in insns[max(0,idx-5):idx+4]:
                 lines.append(f"  {prev.address:08x}: {prev.mnemonic:<8} {prev.op_str}")
 
+
+# Trace the actual source fields copied into float-setting indices 0, 1 and 2
+# by CDebugManager::LoadDeviceSpecific. Each source is a flag + float pair.
+lines += ["", "## Device-specific source fields for render-scale float indices"]
+source_fields = {0xd4108c8: "float setting index 0", 0xd4108d0: "float setting index 1",
+                 0xd4108d8: "float setting index 2"}
+for i, ins in enumerate(insns):
+    if ins.mnemonic != "adrp" or len(ins.operands) < 2:
+        continue
+    if ins.operands[0].type != CS_OP_REG or ins.operands[1].type != CS_OP_IMM:
+        continue
+    reg = ins.reg_name(ins.operands[0].reg)
+    page = int(ins.operands[1].imm)
+    if page != 0xd41000:
+        continue
+    for nxt in insns[i+1:i+12]:
+        if nxt.mnemonic in ("bl", "blr", "b", "ret"):
+            break
+        for op in nxt.operands:
+            if op.type == CS_OP_MEM and op.mem.base and nxt.reg_name(op.mem.base) == reg:
+                ea = page + int(op.mem.disp)
+                if ea in source_fields:
+                    owner = next(((s,e,n) for s,e,n in symbols if s <= ins.address < e), None)
+                    owner_name = owner[2] if owner else "<no symbol>"
+                    lines.append(f"{ea:#x} ({source_fields[ea]}) referenced at {ins.address:#x} in {owner_name}; " +
+                                 " | ".join(f"{q.address:#x}: {q.mnemonic} {q.op_str}" for q in insns[i:i+10]))
+
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text("\n".join(lines) + "\n", encoding="utf-8")
 print(f"Wrote {out}")
