@@ -54,6 +54,16 @@ for sec in elf.iter_sections():
         if sym.name and int(sym.entry.st_size):
             symbols.setdefault(int(sym.entry.st_value), (sym.name, int(sym.entry.st_size)))
 by_addr = {a:n for a,(n,s) in symbols.items()}
+md = Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN)
+md.detail = True
+out = [
+    "# XGS ARM64 render-pass static inspection",
+    "",
+    f"- APK SHA-256 verified: {digest}",
+    "- Read-only static disassembly; this report does not measure runtime cost.",
+    "- Direct BL calls are resolved where a named symbol exists; BLR calls are indirect/vtable calls.",
+    "",
+]
 # Resolve direct callers of the render-scale and backbuffer helpers.
 xref_targets = {
     0x483f80: "CRenderManager::ScaleRenderTargetRes",
@@ -76,16 +86,6 @@ for address, label in xref_targets.items():
     out.append(f"- {label} @ {address:#x}: {len(xrefs[address])} callers")
     for callsite, owner in xrefs[address]:
         out.append(f"  - callsite {callsite:#x} in {owner}")
-md = Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN)
-md.detail = True
-out = [
-    "# XGS ARM64 render-pass static inspection",
-    "",
-    f"- APK SHA-256 verified: {digest}",
-    "- Read-only static disassembly; this report does not measure runtime cost.",
-    "- Direct BL calls are resolved where a named symbol exists; BLR calls are indirect/vtable calls.",
-    "",
-]
 for label, rx in TARGETS:
     matches = [(a,n,s) for a,(n,s) in symbols.items() if rx.search(n)]
     out += [f"## {label}", ""]
