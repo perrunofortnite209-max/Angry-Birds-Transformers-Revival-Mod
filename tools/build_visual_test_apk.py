@@ -198,7 +198,7 @@ def patch_welcome(decoded, report):
     if-nez v0, :ball_done
     new-instance v5, Landroid/widget/TextView;
     invoke-direct {v5, p0}, Landroid/widget/TextView;-><init>(Landroid/content/Context;)V
-    const-string v0, "M"
+    const-string v0, "T"
     invoke-virtual {v5, v0}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
     const/high16 v0, 0x41a00000
     invoke-virtual {v5, v0}, Landroid/widget/TextView;->setTextSize(F)V
@@ -217,15 +217,15 @@ def patch_welcome(decoded, report):
     invoke-virtual {v0, v1}, Landroid/graphics/drawable/GradientDrawable;->setShape(I)V
     const/4 v1, 0x2
     new-array v1, v1, [I
-    const v2, -0xf4e8d8
+    const v2, -0x750000
     const/4 v3, 0x0
     aput v2, v1, v3
-    const v2, -0xe89432
+    const v2, -0xc50000
     const/4 v3, 0x1
     aput v2, v1, v3
     invoke-virtual {v0, v1}, Landroid/graphics/drawable/GradientDrawable;->setColors([I)V
     const/4 v1, 0x2
-    const v2, -0xba2601
+    const v2, -0x4dddde
     invoke-virtual {v0, v1, v2}, Landroid/graphics/drawable/GradientDrawable;->setStroke(II)V
     invoke-virtual {v5, v0}, Landroid/view/View;->setBackground(Landroid/graphics/drawable/Drawable;)V
     const/high16 v0, 0x41000000
@@ -233,7 +233,7 @@ def patch_welcome(decoded, report):
     const/high16 v0, 0x41000000
     const/4 v1, 0x0
     const/4 v2, 0x0
-    const v3, -0xba2601
+    const v3, -0x4dddde
     invoke-virtual {v5, v0, v1, v2, v3}, Landroid/widget/TextView;->setShadowLayer(FFFI)V
     const/16 v0, 0x8
     const/4 v1, 0x6
@@ -263,6 +263,15 @@ def patch_welcome(decoded, report):
     invoke-direct {v2, p0, v1}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;-><init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;Ljava/lang/Runnable;)V
     invoke-virtual {v5, v2}, Landroid/view/View;->setOnTouchListener(Landroid/view/View$OnTouchListener;)V
     invoke-virtual {v4, v5, v0}, Landroid/view/ViewGroup;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V
+    invoke-virtual {v5}, Landroid/view/View;->animate()Landroid/view/ViewPropertyAnimator;
+    move-result-object v1
+    const/4 v2, 0x0
+    invoke-virtual {v1, v2}, Landroid/view/ViewPropertyAnimator;->alpha(F)Landroid/view/ViewPropertyAnimator;
+    move-result-object v1
+    const-wide/16 v2, 0x1388
+    invoke-virtual {v1, v2, v3}, Landroid/view/ViewPropertyAnimator;->setDuration(J)Landroid/view/ViewPropertyAnimator;
+    move-result-object v1
+    invoke-virtual {v1}, Landroid/view/ViewPropertyAnimator;->start()V
     const-wide/16 v2, 0x7530
     invoke-virtual {v5, v1, v2, v3}, Landroid/view/View;->postDelayed(Ljava/lang/Runnable;J)Z
     :ball_done
@@ -292,7 +301,7 @@ def patch_welcome(decoded, report):
     invoke-direct {v0, v1}, Landroid/app/AlertDialog$Builder;-><init>(Landroid/content/Context;)V
     const-string v1, "MOD SETTINGS"
     invoke-virtual {v0, v1}, Landroid/app/AlertDialog$Builder;->setTitle(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
-    const-string v1, "REVIVAL MOD\n\nFPS objetivo del motor: 144\n\nLa burbuja se habilita después de la primera sesión para no interferir con la descarga e instalación inicial."
+    const-string v1, "REVIVAL MOD\n\nConfiguración rápida de la modificación y controles de rendimiento."
     invoke-virtual {v0, v1}, Landroid/app/AlertDialog$Builder;->setMessage(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
     const-string v1, "CERRAR"
     const/4 v2, 0x0
@@ -330,7 +339,7 @@ def patch_welcome(decoded, report):
     aput-boolean v5, v3, v7
     new-instance v5, Landroid/app/AlertDialog$Builder;
     invoke-direct {v5, p0}, Landroid/app/AlertDialog$Builder;-><init>(Landroid/content/Context;)V
-    const-string v6, "REVIVAL MOD  |  FPS MOTOR: 144"
+    const-string v6, "REVIVAL MOD"
     invoke-virtual {v5, v6}, Landroid/app/AlertDialog$Builder;->setTitle(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
     new-instance v6, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalSettingsListener;
     invoke-direct {v6, p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalSettingsListener;-><init>(Landroid/content/Context;)V
@@ -372,6 +381,11 @@ def patch_welcome(decoded, report):
  invoke-virtual {p2}, Landroid/view/MotionEvent;->getActionMasked()I
  move-result v0
  if-nez v0, :touch_move
+ invoke-virtual {p1}, Landroid/view/View;->animate()Landroid/view/ViewPropertyAnimator;
+ move-result-object v1
+ invoke-virtual {v1}, Landroid/view/ViewPropertyAnimator;->cancel()V
+ const/high16 v1, 0x3f800000
+ invoke-virtual {p1, v1}, Landroid/view/View;->setAlpha(F)V
  invoke-virtual {p2}, Landroid/view/MotionEvent;->getRawX()F
  move-result v1
  iput v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->downX:F
@@ -447,6 +461,15 @@ def patch_welcome(decoded, report):
  iget-object v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->hideTask:Ljava/lang/Runnable;
  const-wide/16 v2, 0x7530
  invoke-virtual {p1, v1, v2, v3}, Landroid/view/View;->postDelayed(Ljava/lang/Runnable;J)Z
+ invoke-virtual {p1}, Landroid/view/View;->animate()Landroid/view/ViewPropertyAnimator;
+ move-result-object v1
+ const/4 v2, 0x0
+ invoke-virtual {v1, v2}, Landroid/view/ViewPropertyAnimator;->alpha(F)Landroid/view/ViewPropertyAnimator;
+ move-result-object v1
+ const-wide/16 v2, 0x1388
+ invoke-virtual {v1, v2, v3}, Landroid/view/ViewPropertyAnimator;->setDuration(J)Landroid/view/ViewPropertyAnimator;
+ move-result-object v1
+ invoke-virtual {v1}, Landroid/view/ViewPropertyAnimator;->start()V
  const/4 v1, 0x1
  return v1
  :touch_other
