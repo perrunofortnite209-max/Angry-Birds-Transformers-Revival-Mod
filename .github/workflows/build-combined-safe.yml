@@ -5,6 +5,8 @@ on:
     paths:
       - "tools/build_combined_safe_apk.py"
       - "tools/build_visual_test_apk.py"
+      - "tools/patch_revival_controls.py"
+      - "tools/abt_native_bridge.cpp"
       - ".github/workflows/build-combined-safe.yml"
   workflow_dispatch:
 permissions:
