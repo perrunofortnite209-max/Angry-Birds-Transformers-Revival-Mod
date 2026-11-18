@@ -179,7 +179,7 @@ def main():
         run(["apktool","d","-f",str(patched),"-o",str(decoded)])
         patch_icon(decoded,a.icon); patch_welcome(decoded,report)
         unsigned=a.out/"Angry-Birds-Transformers-Revival-Mod-VISUAL-TEST-unsigned.apk"
-        run(["apktool","b",str(decoded),"-o",str(unsigned)])
+        run(["apktool","b","--use-aapt2",str(decoded),"-o",str(unsigned)])
     report["icon"]={"launcher":True,"adaptive":True,"round":True}
     report["output"]=unsigned.name
     (a.out/"visual-test-report.json").write_text(json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
