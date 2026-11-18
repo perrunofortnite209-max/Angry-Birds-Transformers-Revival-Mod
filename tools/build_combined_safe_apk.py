@@ -99,7 +99,7 @@ def main():
    if len(icon_names)!=7:
     candidates=[n for n in names if "app_icon" in n.lower() or ("drawable" in n.lower() and n.lower().endswith((".png",".webp")))]
     raise RuntimeError(f"Expected 7 launcher PNGs, found {len(icon_names)}: {icon_names}; nearby resource entries: {candidates[:80]}")
-   before={n:sha(original.read(n)) for n in names if n!="AndroidManifest.xml" and not is_dex(n) and not is_icon(n) and not is_sig(n)}
+   before={n:sha(original.read(n)) for n in names if n!="AndroidManifest.xml" and not is_dex(n) and not is_icon(n) and not is_sig(n) and n not in pak_payloads and n not in native_payloads}
    with zipfile.ZipFile(a.out,"w") as out:
     for info in original.infolist():
      n=info.filename
