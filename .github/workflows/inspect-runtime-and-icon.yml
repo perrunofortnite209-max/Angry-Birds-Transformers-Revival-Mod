@@ -136,6 +136,7 @@ jobs:
             output/main_activity.smali
             output/manifest.xml
             output/inspection.json
+            output/icon-resource-map.txt
             input/user-icon.png
             output/native/*
           if-no-files-found: error
