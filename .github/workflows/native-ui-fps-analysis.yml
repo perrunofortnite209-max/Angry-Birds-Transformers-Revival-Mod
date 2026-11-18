@@ -40,12 +40,12 @@ jobs:
           apk,out=Path(sys.argv[1]),Path(sys.argv[2])
           with zipfile.ZipFile(apk) as z:
               for n in ("lib/arm64-v8a/libABBS.so","lib/armeabi-v7a/libABBS.so"):
-                  (out/Path(n).name).write_bytes(z.read(n))
+                  (out/("libABBS-arm64.so" if "arm64-v8a" in n else "libABBS-arm32.so")).write_bytes(z.read(n))
           PY
       - name: Analyze ARM64 native UI and FPS functions
         run: |
           set -euo pipefail
-          python tools/analyze_native_ui.py "$RUNNER_TEMP/native/libABBS.so" "$RUNNER_TEMP/out/arm64-native-analysis.txt"
+          python tools/analyze_native_ui.py "$RUNNER_TEMP/native/libABBS-arm64.so" "$RUNNER_TEMP/out/arm64-native-analysis.txt"
           python - "$RUNNER_TEMP/native/libABBS.so" "$RUNNER_TEMP/out/elf-symbols.txt" <<'PY'
           import subprocess,sys
           from pathlib import Path
