@@ -84,6 +84,21 @@ def main():
                 out.append(f"  at 0x{ins.address:x} function={owner}")
                 for near in insns[max(0,idx-3):min(len(insns),idx+8)]:
                     out.append(f"    {near.address:08x}: {near.mnemonic:8} {near.op_str}")
+        # Dump exact instruction windows for the three methods and known native callers.
+        out.append("\\n## Focused ARM64 disassembly (exact RVAs)")
+        for center, label, before, after in (
+            (0x6ed26c, "LoadDeviceConfigByPerformance", 0, 0x110),
+            (0x6ed4b8, "ChangePerformance", 0, 0x180),
+            (0x6ed610, "GetCurrentPerformance", 0, 0x90),
+            (0x5bdad8, "InGameResultsScreen caller", 0x100, 0x100),
+            (0x6e3ef4, "MainLoadingDeviceConfig caller", 0x100, 0x100),
+        ):
+            start=max(textbase, center-before)
+            end=min(textbase+len(text), center+after)
+            out.append(f"\\nFUNCTION_WINDOW {label} center=0x{center:x} range=0x{start:x}-0x{end:x}")
+            off=start-textbase
+            for ins in md.disasm(text[off:end-start], start):
+                out.append(f"  {ins.address:08x}: {ins.mnemonic:8} {ins.op_str}")
         report_path.write_text("\n".join(out)+"\n",encoding="utf-8")
     print(f"Wrote {len(out)} lines to {report_path}")
 
