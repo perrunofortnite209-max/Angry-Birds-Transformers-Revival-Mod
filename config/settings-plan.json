@@ -7,13 +7,14 @@
     "appName": "Angry Birds Transformers Revival Mod",
     "appIcon": {
       "replacementRequested": true,
-      "sourceAsset": null,
-      "status": "waiting-for-user-icon",
+      "sourceAsset": "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/f3313d17-ccf7-4c82-8007-c68b4233b65d.png",
+      "status": "source-asset-located",
       "targets": [
         "launcher icon",
         "adaptive icon",
         "legacy icon"
-      ]
+      ],
+      "sourceAssetName": "f3313d17-ccf7-4c82-8007-c68b4233b65d.png"
     }
   },
   "welcome": {
