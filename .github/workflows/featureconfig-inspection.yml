@@ -45,33 +45,46 @@ jobs:
       - name: Extract and decode Global FeatureConfig definitions
         run: |
           set -euo pipefail
+          python - "$RUNNER_TEMP/paks" "$RUNNER_TEMP/out" <<'PY'
+          import importlib.util,sys
+          from pathlib import Path
+          pakdir,out=Path(sys.argv[1]),Path(sys.argv[2])
+          spec=importlib.util.spec_from_file_location("xgs_kpx","tools/xgs_kpx_v2.py")
+          mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+          found=[]
+          for pak in sorted(pakdir.glob("*.pak")):
+              blob=pak.read_bytes()
+              meta=mod.parse(blob)
+              for entry in meta["entries"]:
+                  if "featureconfig" in entry.name.lower():
+                      data=mod.unpack_entry(blob,meta,entry)
+                      safe=entry.name.replace("/","__").replace("\\","__")
+                      (out/(safe+".xox2")).write_bytes(data)
+                      found.append(f"{pak.name}\t{entry.name}\t{len(data)}")
+                      if entry.name.lower().endswith("global/featureconfig.xml") or entry.name.lower()=="global/featureconfig.xml":
+                          (out/"FeatureConfig.original.xox2").write_bytes(data)
+          (out/"source.txt").write_text("\n".join(found)+"\n")
+          if not found:
+              raise SystemExit("No FeatureConfig-named entries found in any KPX archive")
+          print("FeatureConfig entries found:",len(found))
+          print("\n".join(found))
+          PY
           git clone https://github.com/omonkeyz/angry-birds-go-rust.git "$RUNNER_TEMP/abgtool"
           git -C "$RUNNER_TEMP/abgtool" checkout 7cd02d36d42b58b652fdc98848de08221d1a0469
           cargo build --release --manifest-path "$RUNNER_TEMP/abgtool/abgtool/Cargo.toml"
           ABG="$RUNNER_TEMP/abgtool/abgtool/target/release/abgtool"
-          FOUND=0
-          for p in "$RUNNER_TEMP"/paks/*.pak; do
-            if python tools/xgs_kpx_v2.py list "$p" 2>/dev/null | grep -qi 'Global/FeatureConfig.xml'; then
-              mkdir -p "$RUNNER_TEMP/unpacked"
-              "$ABG" unpack "$p" "$RUNNER_TEMP/unpacked"
-              f="$(find "$RUNNER_TEMP/unpacked" -type f -iname 'FeatureConfig.xml' -print -quit)"
-              test -n "$f"
-              "$ABG" xox "$f" > "$RUNNER_TEMP/out/FeatureConfig.decoded.xml"
-              cp "$f" "$RUNNER_TEMP/out/FeatureConfig.original.xox2"
-              echo "Found in $(basename "$p") at $f" > "$RUNNER_TEMP/out/source.txt"
-              FOUND=1
-              break
-            fi
-          done
-          test "$FOUND" -eq 1
+          SOURCE="$(find "$RUNNER_TEMP/out" -maxdepth 1 -name 'FeatureConfig.original.xox2' -print -quit)"
+          if [ -z "$SOURCE" ]; then
+            SOURCE="$(find "$RUNNER_TEMP/out" -maxdepth 1 -name '*FeatureConfig.xml.xox2' -print -quit)"
+          fi
+          test -n "$SOURCE"
+          "$ABG" xox "$SOURCE" > "$RUNNER_TEMP/out/FeatureConfig.decoded.xml"
           python - "$RUNNER_TEMP/out/FeatureConfig.decoded.xml" "$RUNNER_TEMP/out/feature-list.txt" <<'PY'
           import re,sys
           from pathlib import Path
           s=Path(sys.argv[1]).read_text()
           keys=("feature","name","id","default","value","description","fps","frame")
-          lines=[]
-          for tag in re.findall(r"<[^>]+>",s):
-              if any(k in tag.lower() for k in keys): lines.append(tag)
+          lines=[tag for tag in re.findall(r"<[^>]+>",s) if any(k in tag.lower() for k in keys)]
           Path(sys.argv[2]).write_text("\n".join(lines)+"\n")
           print("Feature definitions:",len(lines))
           PY
@@ -81,5 +94,3 @@ jobs:
           name: featureconfig-inspection
           path: ${{ runner.temp }}/out/
           retention-days: 7
-
-# Run the feature configuration inspection.
