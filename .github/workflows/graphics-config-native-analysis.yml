@@ -98,6 +98,36 @@ jobs:
                   print("---- extracted config ----")
                   print(p.read_text(encoding="utf-8", errors="replace"))
           PY
+      - name: Scan all XML archives for VFXLimitConfig.xml
+        run: |
+          python - "$APK" "$RUNNER_TEMP/out/xml-all-extracted" "$RUNNER_TEMP/out/vfx-xml-archive-scan.txt" <<'PY'
+          import sys, zipfile
+          from pathlib import Path
+          sys.path.insert(0, "tools")
+          from extract_xgs_pak import parse_pak
+          apk, out_dir, report = sys.argv[1:]
+          rows = []
+          with zipfile.ZipFile(apk) as z:
+              for name in sorted(n for n in z.namelist() if n.lower().endswith(".pak") and ("xml" in n.lower() or "config" in n.lower())):
+                  blob = z.read(name)
+                  if len(blob) < 4 or blob[0] != 2 or blob[1:4] != b"KPX":
+                      rows.append(f"SKIP {name}: unsupported header {blob[:4].hex()}")
+                      continue
+                  target = str(Path(out_dir) / Path(name).stem)
+                  try:
+                      lines = parse_pak(blob, name, target)
+                      matches = [x for x in lines if "VFXLimitConfig.xml" in x]
+                      rows.append(f"ARCHIVE {name}: entries={len(lines)-1}; matches={len(matches)}")
+                      rows.extend(matches)
+                  except Exception as exc:
+                      rows.append(f"ERROR {name}: {type(exc).__name__}: {exc}")
+          for p in Path(out_dir).rglob("*"):
+              if p.is_file() and p.name.lower() == "vfxlimitconfig.xml":
+                  rows.append(f"EXTRACTED {p}")
+                  rows.append(p.read_text(encoding="utf-8", errors="replace"))
+          Path(report).write_text("\n".join(rows) + "\n", encoding="utf-8")
+          print("\n".join(rows))
+          PY
       - name: Trace particle manager internals (read-only)
         run: python tools/trace_particle_manager_detail.py "$APK" "$RUNNER_TEMP/out/particle-manager-detail.txt"
       - name: Upload text report
@@ -114,5 +144,7 @@ jobs:
             ${{ runner.temp }}/out/pak-inventory.txt
             ${{ runner.temp }}/out/deviceconfigs-report.txt
             ${{ runner.temp }}/out/deviceconfigs-extracted/**
+            ${{ runner.temp }}/out/vfx-xml-archive-scan.txt
+            ${{ runner.temp }}/out/xml-all-extracted/**
           if-no-files-found: error
           retention-days: 7
