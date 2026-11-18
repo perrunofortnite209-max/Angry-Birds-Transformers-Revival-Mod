@@ -210,11 +210,31 @@ def patch_welcome(decoded, report):
     invoke-direct {v0}, Landroid/graphics/drawable/GradientDrawable;-><init>()V
     const/4 v1, 0x1
     invoke-virtual {v0, v1}, Landroid/graphics/drawable/GradientDrawable;->setShape(I)V
-    const v1, -0xe98801
-    invoke-virtual {v0, v1}, Landroid/graphics/drawable/GradientDrawable;->setColor(I)V
+    const/4 v1, 0x2
+    new-array v1, v1, [I
+    const v2, -0xe87511
+    const/4 v3, 0x0
+    aput v2, v1, v3
+    const v2, -0xff6a20
+    const/4 v3, 0x1
+    aput v2, v1, v3
+    invoke-virtual {v0, v1}, Landroid/graphics/drawable/GradientDrawable;->setColors([I)V
+    const/4 v1, 0x1
+    const v2, -0x1
+    invoke-virtual {v0, v1, v2}, Landroid/graphics/drawable/GradientDrawable;->setStroke(II)V
     invoke-virtual {v5, v0}, Landroid/view/View;->setBackground(Landroid/graphics/drawable/Drawable;)V
     const/high16 v0, 0x41000000
     invoke-virtual {v5, v0}, Landroid/view/View;->setElevation(F)V
+    const/high16 v0, 0x40800000
+    const/4 v1, 0x0
+    const/high16 v2, 0x40000000
+    const/high16 v3, -0x1000000
+    invoke-virtual {v5, v0, v1, v2, v3}, Landroid/widget/TextView;->setShadowLayer(FFFI)V
+    const/4 v0, 0x8
+    const/4 v1, 0x6
+    const/4 v2, 0x8
+    const/4 v3, 0x6
+    invoke-virtual {v5, v0, v1, v2, v3}, Landroid/widget/TextView;->setPadding(IIII)V
     invoke-virtual {p0}, Landroid/content/Context;->getResources()Landroid/content/res/Resources;
     move-result-object v6
     invoke-virtual {v6}, Landroid/content/res/Resources;->getDisplayMetrics()Landroid/util/DisplayMetrics;
