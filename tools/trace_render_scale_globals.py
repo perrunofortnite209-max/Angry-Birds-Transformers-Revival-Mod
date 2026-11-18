@@ -124,6 +124,35 @@ for slot, desc in sorted(relocation_slots.items()):
                   if int(s['sh_addr']) <= slot < int(s['sh_addr']) + int(s['sh_size'])), None)
     lines.append(f"{slot:#x}: section={owner.name if owner else '<unmapped>'} {desc}")
 
+
+# Focused disassembly for the functions around the only scale-global GOT
+# reference and the render/device-config lifecycle. This keeps the report
+# actionable without guessing at a callable ABI or patching native code.
+lines += ["", "## Focused function disassembly"]
+focus_addresses = [0x6e7294, 0x484d34, 0x483f80, 0x48354c, 0x4832e4,
+                   0x6ebcac, 0x6ec380, 0x6ed26c, 0x6ed4b8]
+symtab = elf.get_section_by_name(".symtab")
+symbols = []
+if symtab:
+    for sym in symtab.iter_symbols():
+        start = int(sym["st_value"])
+        size = int(sym["st_size"])
+        if start and size:
+            symbols.append((start, start + size, sym.name))
+for addr in focus_addresses:
+    owner = next(((s, e, n) for s, e, n in symbols if s <= addr < e), None)
+    if owner:
+        start, end, name = owner
+        # Bound output to the owning function and avoid oversized functions.
+        end = min(end, start + 0x500)
+        label = f"{name} [{start:#x}-{end:#x}]"
+    else:
+        start, end, label = max(base, addr - 0x80), min(base + len(code), addr + 0x180), "<no containing symbol>"
+    lines.append(f"\n### {addr:#x}: {label}")
+    for ins in md.disasm(code[start-base:end-base], start):
+        marker = "  <==" if ins.address == addr else ""
+        lines.append(f"{ins.address:08x}: {ins.mnemonic:<8} {ins.op_str}{marker}")
+
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text("\n".join(lines) + "\n", encoding="utf-8")
 print(f"Wrote {out}")
