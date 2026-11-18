@@ -37,6 +37,27 @@ REPORT="$OUT/android-integration-report.txt"
     xargs -0 grep -nE 'Landroid/view/Surface;->setFrameRate|Landroid/view/Window;->setPreferredRefreshRate|Landroid/view/Choreographer;|Landroid/view/SurfaceView;|Landroid/opengl/GLSurfaceView;' 2>/dev/null |
     head -n 240 || true
   echo
+  echo "=== Selected integration smali (reviewable source excerpts) ==="
+  mkdir -p "$OUT/integration-smali"
+  for rel in \
+    "smali_classes5/com/rovio/angrybirdstransformers/AngryBirdsTransformersActivity.smali" \
+    "smali/com/exient/ExientGLSurfaceView.smali" \
+    "smali/com/exient/XGS/XGSActivity.smali"; do
+    if [[ -f "$DECODE/$rel" ]]; then
+      mkdir -p "$OUT/integration-smali/$(dirname "$rel")"
+      cp "$DECODE/$rel" "$OUT/integration-smali/$rel"
+      echo "Included: $rel"
+    else
+      echo "Not found: $rel"
+    fi
+  done
+  echo
+  echo "=== Main activity lifecycle, view creation and layout references ==="
+  ACTIVITY="$DECODE/smali_classes5/com/rovio/angrybirdstransformers/AngryBirdsTransformersActivity.smali"
+  if [[ -f "$ACTIVITY" ]]; then
+    grep -nE '^\.method|onCreate|onResume|onPause|setContentView|addContentView|addView|Exient|XGSActivity|GLSurfaceView' "$ACTIVITY" | head -n 220 || true
+  fi
+  echo
   echo "=== Safety note ==="
   echo "Decoded proprietary resources and smali stay in the private runner workspace and are not uploaded."
   echo "Only text diagnostics and the decoded manifest are uploaded; no APK or game assets are published."
