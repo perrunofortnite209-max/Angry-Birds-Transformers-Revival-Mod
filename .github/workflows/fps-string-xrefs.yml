@@ -1,0 +1,50 @@
+name: Analyze native FPS string references
+
+on:
+  push:
+    branches: [feature/full-revival-mod]
+    paths:
+      - "tools/analyze_fps_xrefs.py"
+      - ".github/workflows/fps-string-xrefs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-revival-mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ELF analysis tools
+        run: python -m pip install pyelftools capstone
+      - name: Download and verify original APK privately
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/private" "$RUNNER_TEMP/native" "$RUNNER_TEMP/out"
+          gh release download game --repo "$GITHUB_REPOSITORY" --pattern "*.apk" --dir "$RUNNER_TEMP/private"
+          APK="$(find "$RUNNER_TEMP/private" -maxdepth 1 -name '*.apk' -print -quit)"
+          test -n "$APK"
+          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  $APK" | sha256sum -c -
+          python - "$APK" "$RUNNER_TEMP/native/libABBS-arm64.so" <<'PY'
+          import sys, zipfile
+          from pathlib import Path
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              Path(sys.argv[2]).write_bytes(z.read("lib/arm64-v8a/libABBS.so"))
+          PY
+      - name: Locate native FPS string references
+        run: python tools/analyze_fps_xrefs.py "$RUNNER_TEMP/native/libABBS-arm64.so" "$RUNNER_TEMP/out/fps-string-xrefs.txt"
+      - name: Upload text-only report
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-fps-string-xrefs
+          path: ${{ runner.temp }}/out/fps-string-xrefs.txt
+          retention-days: 7
