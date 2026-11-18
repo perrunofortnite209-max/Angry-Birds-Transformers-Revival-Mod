@@ -30,9 +30,7 @@ jobs:
           python-version: "3.12"
       - uses: android-actions/setup-android@v3
         with:
-          packages: |
-            platform-tools
-            build-tools;35.0.0
+          packages: platform-tools
           accept-android-sdk-licenses: true
 
       - name: Install APK and image tooling
@@ -41,6 +39,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends apktool
           python -m pip install --upgrade pip pillow
+          sdkmanager --install 'build-tools;35.0.0'
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
       - name: Download exact original APK and saved icon
         env:
