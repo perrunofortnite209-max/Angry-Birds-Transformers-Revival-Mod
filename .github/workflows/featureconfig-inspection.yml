@@ -75,7 +75,7 @@ jobs:
           ABG="$RUNNER_TEMP/abgtool/abgtool/target/release/abgtool"
           SOURCE="$(find "$RUNNER_TEMP/out" -maxdepth 1 -name 'FeatureConfig.original.xox2' -print -quit)"
           if [ -z "$SOURCE" ]; then
-            SOURCE="$(find "$RUNNER_TEMP/out" -maxdepth 1 -name '*FeatureConfig.xml.xox2' -print -quit)"
+            SOURCE="$(find "$RUNNER_TEMP/out" -maxdepth 1 -name '*featureconfig.xml.xox2' ! -name '*uifeatureconfigscreen*' -print -quit)"
           fi
           test -n "$SOURCE"
           "$ABG" xox "$SOURCE" > "$RUNNER_TEMP/out/FeatureConfig.decoded.xml"
