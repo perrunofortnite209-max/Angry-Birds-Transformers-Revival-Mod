@@ -49,6 +49,14 @@ def main():
                     if sym.entry.st_info.type=="STT_FUNC" and sym.name:
                         funcs.append((int(sym.entry.st_value),int(sym.entry.st_size),sym.name))
         funcs.sort()
+        out.append("\\n## Native config-related symbols")
+        for fa,fs,fn in funcs:
+            if any(key in fn.lower() for key in ("deviceconfig","loadxmlconfig","configprofile","configmanager")):
+                out.append(f"SYMBOL 0x{fa:x} size=0x{fs:x} {fn}")
+                if "loadxmlconfig" in fn.lower() and "cmapmanager" in fn.lower() and fs:
+                    off=fa-textbase
+                    for ins in md.disasm(text[off:off+fs],fa):
+                        out.append(f"  {ins.address:08x}: {ins.mnemonic:8} {ins.op_str}")
         for va,s,secname in found:
             page=va & ~0xfff
             candidates=[]
