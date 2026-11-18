@@ -40,29 +40,47 @@ jobs:
           apktool d -f input/original.apk -o decoded
           python - <<'PY'
           from pathlib import Path
-          import json, re
+          import json, re, xml.etree.ElementTree as ET
           root=Path("decoded")
-          target="Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;"
-          hits=[]
-          for p in root.glob("smali*/**/*.smali"):
+          manifest=ET.parse(root/"AndroidManifest.xml").getroot()
+          ns="{http://schemas.android.com/apk/res/android}"
+          app=manifest.find("application")
+          names=[]
+          for tag in ("activity","activity-alias"):
+              for node in app.findall(tag):
+                  name=node.get(ns+"name")
+                  if name: names.append(name)
+          package=manifest.get("package","")
+          normalized=[]
+          for name in names:
+              if name.startswith("."): name=package+name
+              elif "." not in name: name=package+"."+name
+              normalized.append(name.replace(".","/"))
+          files=list(root.glob("smali*/**/*.smali"))
+          candidates=[]
+          for p in files:
               s=p.read_text(errors="ignore")
-              if re.search(r"^\\.class\\b.*"+re.escape(target),s,re.M):
-                  hits.append((p,s))
-          if len(hits)!=1: raise SystemExit(f"Expected exactly one main Activity, found {len(hits)}")
-          p,s=hits[0]
+              m=re.search(r"(?m)^\.class\s+[^\n]*?L([^;]+);",s)
+              if not m: continue
+              cls=m.group(1)
+              if cls in normalized or ("onCreate" in s and ("Activity" in cls or "Game" in cls)):
+                  candidates.append((p,s,cls,cls in normalized))
+          candidates.sort(key=lambda x:(not x[3],x[2]))
+          if not candidates: raise SystemExit("No Activity candidates found; inspect manifest and dex class list")
+          p,s,cls,is_manifest= candidates[0]
           Path("output/main_activity.smali").write_text(s)
-          manifest=(root/"AndroidManifest.xml").read_text(errors="ignore")
-          (Path("output/manifest.xml")).write_text(manifest)
+          (Path("output/manifest.xml")).write_text((root/"AndroidManifest.xml").read_text(errors="ignore"))
           icon_files=[]
           for q in (root/"res").rglob("*"):
               if q.is_file() and ("ic_launcher" in q.name.lower() or "icon" in q.name.lower()):
                   icon_files.append(str(q.relative_to(root)))
-          report={"activity_path":str(p.relative_to(root)),
-                  "activity_methods":re.findall(r"(?m)^\\.method[^\\n]*",s),
+          report={"package":package,"manifest_activities":names,"selected_activity_class":cls,
+                  "selected_class_matches_manifest":is_manifest,"activity_path":str(p.relative_to(root)),
+                  "activity_methods":re.findall(r"(?m)^\.method[^\n]*",s),
                   "icon_resource_files":icon_files,
-                  "manifest_icon_lines":[x.strip() for x in manifest.splitlines() if "icon" in x.lower()],
-                  "smali_files":len(list(root.glob("smali*/**/*.smali")))}
-          Path("output/inspection.json").write_text(json.dumps(report,indent=2)+"\\n")
+                  "manifest_icon_lines":[x.strip() for x in (root/"AndroidManifest.xml").read_text(errors="ignore").splitlines() if "icon" in x.lower()],
+                  "smali_files":len(files)}
+          Path("output/inspection.json").write_text(json.dumps(report,indent=2)+"\n")
           print(json.dumps(report,indent=2))
           PY
       - name: Upload inspection bundle
