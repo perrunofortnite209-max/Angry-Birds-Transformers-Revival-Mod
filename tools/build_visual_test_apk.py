@@ -323,7 +323,9 @@ def patch_welcome(decoded, report):
 .end method
 """
     path.write_text(source+"\n"+helper+"\n"+floating_helper+"\n"+settings_helper,encoding="utf-8")
-    base=path.parent.parent/"smali/com/rovio/angrybirdstransformers"
+    smali_root=next((parent for parent in path.parents if parent.name.startswith("smali")),None)
+    if smali_root is None: raise RuntimeError("No se encontró la raíz smali para los listeners Revival")
+    base=smali_root/"com/rovio/angrybirdstransformers"
     base.mkdir(parents=True,exist_ok=True)
     files={
     "AngryBirdsTransformersActivity$RevivalBallTouchListener.smali":r""".class public final Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;
@@ -389,6 +391,18 @@ def patch_welcome(decoded, report):
  move-result v1
  iget v2, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->downY:F
  sub-float v4, v1, v2
+ invoke-static {v3}, Ljava/lang/Math;->abs(F)F
+ move-result v5
+ const/high16 v6, 0x41400000
+ cmpl-float v5, v5, v6
+ if-gez :touch_check_vertical
+ goto :touch_drag_start
+ :touch_check_vertical
+ invoke-static {v4}, Ljava/lang/Math;->abs(F)F
+ move-result v5
+ cmpl-float v5, v5, v6
+ if-ltz :touch_consume_move
+ :touch_drag_start
  const/4 v1, 0x1
  iput-boolean v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->moved:Z
  iget v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->startX:F
@@ -397,6 +411,7 @@ def patch_welcome(decoded, report):
  iget v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->startY:F
  add-float/2addr v1, v4
  invoke-virtual {p1, v1}, Landroid/view/View;->setY(F)V
+ :touch_consume_move
  const/4 v1, 0x1
  return v1
  :touch_up
