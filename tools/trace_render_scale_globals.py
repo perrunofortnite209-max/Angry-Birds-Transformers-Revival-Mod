@@ -20,6 +20,7 @@ lines = ["Render-scale relocation and data-structure trace",
          f"ELF machine={elf['e_machine']} class={elf.elfclass}", ""]
 # Relocations reveal the exact symbol/addend used to initialize pointer slots.
 lines.append("## Relocations involving scale globals or the render-scale callback")
+relocation_slots = {}
 for sec in elf.iter_sections():
     if not isinstance(sec, RelocationSection):
         continue
@@ -34,6 +35,8 @@ for sec in elf.iter_sections():
         related = any(sval == t or (addend is not None and (sval + addend) == t) for t in targets)
         near_slots = 0xe5f70 <= off <= 0xe6000
         if related or near_slots:
+            if related:
+                relocation_slots[off] = str(name) + " -> " + str(targets.get(sval + (addend or 0), "scale-global"))
             typ = rel['r_info_type']
             lines.append(f"{sec.name}: place={off:#x} type={typ} symbol={name!r} sym_value={sval:#x} addend={addend!r} resolved={(sval + addend if addend is not None else sval):#x}")
 # Decode the packed object/table around the unaligned callback pointer.
@@ -56,6 +59,22 @@ md = Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN); md.detail = True
 textsec = elf.get_section_by_name(".text")
 base, code = int(textsec['sh_addr']), textsec.data()
 insns = list(md.disasm(code, base))
+lines += ["", "## Code references to relocation slots (pointer indirection)"]
+for i, ins in enumerate(insns):
+    if ins.mnemonic != "adrp" or len(ins.operands) < 2:
+        continue
+    if ins.operands[0].type != CS_OP_REG or ins.operands[1].type != CS_OP_IMM:
+        continue
+    reg = ins.reg_name(ins.operands[0].reg)
+    page = int(ins.operands[1].imm)
+    for nxt in insns[i+1:i+12]:
+        if nxt.mnemonic in ("bl", "blr", "b", "ret"):
+            break
+        for op in nxt.operands:
+            if op.type == CS_OP_MEM and op.mem.base and nxt.reg_name(op.mem.base) == reg:
+                ea = page + int(op.mem.disp)
+                if ea in relocation_slots:
+                    lines.append(f"slot {ea:#x} ({relocation_slots[ea]}): ADRP {ins.address:#x}; {nxt.address:#x}: {nxt.mnemonic} {nxt.op_str}")
 lines += ["", "## Code references to .rodata page 0x117000"]
 for i, ins in enumerate(insns):
     if ins.mnemonic != "adrp" or len(ins.operands) < 2:
