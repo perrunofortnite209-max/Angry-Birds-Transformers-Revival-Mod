@@ -16,13 +16,13 @@ def main():
     ap.add_argument("--apk",type=Path,required=True)
     ap.add_argument("--out",type=Path,required=True)
     ap.add_argument("--repo",type=Path,default=Path("."))
-    ap.add_argument("--only",choices=("settings","features","both"),default="both")
+    ap.add_argument("--only",choices=("settings","features","vfx","both"),default="both")
     a=ap.parse_args(); a.out.parent.mkdir(parents=True,exist_ok=True)
     builder=load(a.repo/"tools/build_visual_test_apk.py")
-    include=("settings","features") if a.only=="both" else (a.only,)
+    include=("settings","features","vfx") if a.only=="both" else (a.only,)
     report={"type":f"PAK-only diagnostic ({a.only})","selected_patch":a.only,"apktool_used":False,"manifest_rebuilt":False,
             "dex_rebuilt":False,"icon_changed":False,"welcome_dialog_added":False,
-            "gameplay_fps_graphics_code_changed":False,"resources":[],"changed_zip_entries":[]}
+            "gameplay_fps_graphics_code_changed":False,"particle_vfx_thresholds_tuned":a.only in ("vfx","both"),"resources":[],"changed_zip_entries":[]}
     with tempfile.TemporaryDirectory(prefix="abt-pak-only-") as td:
         intermediate=Path(td)/"patched-with-old-signature.apk"
         builder.patch_paks(a.apk,intermediate,a.repo.resolve(),report,include=include)
