@@ -130,7 +130,7 @@ for slot, desc in sorted(relocation_slots.items()):
 # actionable without guessing at a callable ABI or patching native code.
 lines += ["", "## Focused function disassembly"]
 focus_addresses = [0x6e7294, 0x484d34, 0x483f80, 0x48354c, 0x4832e4,
-                   0x6ebcac, 0x6ec380, 0x6ed26c, 0x6ed4b8]
+                   0x6ebcac, 0x6ec380, 0x6ed26c, 0x6ed4b8, 0x711598, 0x7115a8, 0x7115b8]
 symtab = elf.get_section_by_name(".symtab")
 symbols = []
 if symtab:
@@ -152,6 +152,19 @@ for addr in focus_addresses:
     for ins in md.disasm(code[start-base:end-base], start):
         marker = "  <==" if ins.address == addr else ""
         lines.append(f"{ins.address:08x}: {ins.mnemonic:<8} {ins.op_str}{marker}")
+
+
+# Dump nearby debug-manager accessors and candidate setting-name strings.
+# The two GetDebugFloat enum indices in CreateVolatileResources must be
+# mapped before treating them as user-facing render-scale controls.
+if ro:
+    lines += ["", "## Debug-setting name strings"]
+    import re
+    for m in re.finditer(rb"[A-Za-z0-9_./ -]{4,80}", data):
+        raw_s = m.group(0)
+        s = raw_s.decode("ascii", "ignore")
+        if any(k in s.lower() for k in ("render", "scale", "resolution", "debugfloat", "debug_float")):
+            lines.append(f".rodata {va + m.start():#x}: {s}")
 
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text("\n".join(lines) + "\n", encoding="utf-8")
