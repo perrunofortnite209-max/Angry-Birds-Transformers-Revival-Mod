@@ -97,6 +97,50 @@ jobs:
           print(out.read_text())
           if not lines: raise SystemExit("No extracted deviceconfig XML files could be mapped to a PAK.")
           PY
+      - name: Verify reversible deviceconfigs PAK and profile codec round-trip
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/out/deviceconfig-validation" "$RUNNER_TEMP/out/deviceconfig-xox"
+          python tools/xgs_kpx_v2.py roundtrip "$RUNNER_TEMP/paks/deviceconfigs.pak" "$RUNNER_TEMP/out/deviceconfig-validation/deviceconfigs-roundtrip.pak"
+          cmp "$RUNNER_TEMP/paks/deviceconfigs.pak" "$RUNNER_TEMP/out/deviceconfig-validation/deviceconfigs-roundtrip.pak"
+          python - "$RUNNER_TEMP/unpacked/deviceconfigs" "$RUNNER_TEMP/out/deviceconfig-xox" "$RUNNER_TEMP/abgtool/abgtool/target/release/abgtool" <<'PY'
+          import subprocess,sys,hashlib
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          source,out,abg=map(Path,sys.argv[1:])
+          report=[]
+          for path in sorted(source.glob("*.xml")):
+              decoded=subprocess.run([str(abg),"xox",str(path)],capture_output=True,text=True)
+              if decoded.returncode:
+                  report.append(f"FAIL decode {path.name}: {decoded.stderr.strip()}")
+                  continue
+              xml=decoded.stdout
+              try: ET.fromstring(xml)
+              except Exception as exc:
+                  report.append(f"FAIL XML {path.name}: {exc}")
+                  continue
+              original=out/(path.stem+".original.xml")
+              encoded=out/(path.stem+".rebuilt.xox2")
+              restored=out/(path.stem+".restored.xml")
+              original.write_text(xml,encoding="utf-8")
+              enc=subprocess.run([sys.executable,"tools/xox2_codec.py",str(original),str(encoded)],capture_output=True,text=True)
+              if enc.returncode:
+                  report.append(f"FAIL encode {path.name}: {enc.stderr.strip()}")
+                  continue
+              dec=subprocess.run([str(abg),"xox",str(encoded)],capture_output=True,text=True)
+              if dec.returncode:
+                  report.append(f"FAIL cross-decode {path.name}: {dec.stderr.strip()}")
+                  continue
+              restored.write_text(dec.stdout,encoding="utf-8")
+              same=ET.canonicalize(xml)==ET.canonicalize(dec.stdout)
+              report.append(f"{'PASS' if same else 'FAIL'} {path.name}: {len(xml)} chars sha256={hashlib.sha256(xml.encode()).hexdigest()}")
+          (out/"profile-roundtrip-report.txt").write_text("\\n".join(report)+"\\n")
+          print("\\n".join(report))
+          if not report or any(line.startswith("FAIL") for line in report):
+              raise SystemExit("At least one Android/device profile failed independent XOX2 round-trip validation.")
+          PY
+          echo "deviceconfigs_pak_noop_roundtrip=PASS" > "$RUNNER_TEMP/out/deviceconfig-validation/result.txt"
+          echo "profile_xox2_cross_roundtrip=PASS" >> "$RUNNER_TEMP/out/deviceconfig-validation/result.txt"
       - name: Find real graphics and frame-pacing configuration candidates
         run: |
           set -euo pipefail
@@ -146,5 +190,7 @@ jobs:
             ${{ runner.temp }}/deviceconfigs-full/
             ${{ runner.temp }}/deviceconfigs-index.txt
             ${{ runner.temp }}/out/pak-deviceconfig-map.txt
+            ${{ runner.temp }}/out/deviceconfig-validation/
+            ${{ runner.temp }}/out/deviceconfig-xox/profile-roundtrip-report.txt
           if-no-files-found: error
           retention-days: 7
