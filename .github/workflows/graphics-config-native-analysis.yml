@@ -9,6 +9,7 @@ on:
       - "tools/trace_render_scale_globals.py"
       - "tools/trace_explosion_hotspots.py"
       - "tools/trace_particle_manager_detail.py"
+      - "tools/xox2_codec.py"
       - ".github/workflows/graphics-config-native-analysis.yml"
   workflow_dispatch:
 permissions:
@@ -128,6 +129,21 @@ jobs:
           Path(report).write_text("\n".join(rows) + "\n", encoding="utf-8")
           print("\n".join(rows))
           PY
+      - name: Decode VFXLimitConfig XOX2 and validate XML (read-only)
+        run: |
+          set -euo pipefail
+          CONFIG="$(find "$RUNNER_TEMP/out/xml-all-extracted" -type f -iname 'vfxlimitconfig.xml' -print -quit)"
+          test -n "$CONFIG"
+          python tools/xox2_codec.py --decode "$CONFIG" "$RUNNER_TEMP/out/vfxlimitconfig.decoded.xml"
+          python - "$RUNNER_TEMP/out/vfxlimitconfig.decoded.xml" <<'PY'
+          import sys
+          from pathlib import Path
+          from xml.etree import ElementTree
+          path = Path(sys.argv[1])
+          root = ElementTree.parse(path).getroot()
+          print(f"Validated XML root={root.tag}; bytes={path.stat().st_size}")
+          print(path.read_text(encoding="utf-8"))
+          PY
       - name: Trace particle manager internals (read-only)
         run: python tools/trace_particle_manager_detail.py "$APK" "$RUNNER_TEMP/out/particle-manager-detail.txt"
       - name: Upload text report
@@ -145,6 +161,7 @@ jobs:
             ${{ runner.temp }}/out/deviceconfigs-report.txt
             ${{ runner.temp }}/out/deviceconfigs-extracted/**
             ${{ runner.temp }}/out/vfx-xml-archive-scan.txt
+            ${{ runner.temp }}/out/vfxlimitconfig.decoded.xml
             ${{ runner.temp }}/out/xml-all-extracted/**
           if-no-files-found: error
           retention-days: 7
