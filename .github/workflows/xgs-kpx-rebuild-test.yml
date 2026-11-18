@@ -71,7 +71,15 @@ jobs:
               if listing.returncode == 0 and any("uisettingsscreen.xml" in line.lower() for line in listing.stdout.splitlines()):
                   matches.append((pak,listing.stdout))
           if len(matches) != 1:
-              raise SystemExit(f"Expected one settings PAK, found {len(matches)}")
+              print(f"Expected one settings PAK, found {len(matches)}")
+              for pak in sorted(paks.glob("*.pak")):
+                  listing=subprocess.run([sys.executable,str(tool),"list",str(pak)],text=True,capture_output=True)
+                  print(f"DIAG {pak.name} header={pak.read_bytes()[:24].hex()} rc={listing.returncode}")
+                  if listing.returncode:
+                      print("  parser_error="+listing.stderr.strip()[:500])
+                  else:
+                      print("  "+listing.stdout[:1000].replace("\\n"," | "))
+              raise SystemExit("Unable to identify the settings PAK from the KPX v2 archive list")
           pak, listing=matches[0]
           entry=next(line.split()[-1] for line in listing.splitlines() if "uisettingsscreen.xml" in line.lower())
           rebuilt=out/"pak-roundtrip.pak"
