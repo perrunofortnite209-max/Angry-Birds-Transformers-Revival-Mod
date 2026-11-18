@@ -51,6 +51,8 @@ static int set_graphics(uintptr_t base, int target) {
     return updated == current + direction ? updated + 1 : -3;
 }
 
+} // namespace
+
 extern "C" JNIEXPORT jint JNICALL
 Java_com_rovio_angrybirdstransformers_RevivalNative_setFps(JNIEnv *, jclass, jint fps) {
     if (!(fps == 0 || fps == 30 || fps == 60 || fps == 90 || fps == 120 || fps == 140 || fps == 144)) return -1;
