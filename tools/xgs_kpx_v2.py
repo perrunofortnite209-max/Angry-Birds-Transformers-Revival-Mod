@@ -39,13 +39,13 @@ def put32(b: bytearray, at: int, value: int) -> None:
 def cstr(b: bytes, at: int) -> str:
     if at < 0 or at >= len(b):
         raise PakError("name offset outside archive")
-    end = b.find(b"\\0", at)
+    end = b.find(b"\0", at)
     if end < 0:
         raise PakError("unterminated name")
     return b[at:end].decode("utf-8")
 
 def parse(blob: bytes):
-    if len(blob) < HEADER or blob[:4] != b"\\x02KPX":
+    if len(blob) < HEADER or blob[:4] != b"\x02KPX":
         raise PakError("not an Exient KPX v2 archive")
     compression = u32(blob, 0x10)
     if compression not in (0, 1, 2):
