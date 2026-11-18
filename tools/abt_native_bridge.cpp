@@ -37,32 +37,18 @@ static int current_graphics(uintptr_t base) {
 }
 static int set_graphics(uintptr_t base, int target) {
     if (target < 0 || target > 3) return -1;
-    using LoadProfile = int (*)(int);
-    auto load = reinterpret_cast<LoadProfile>(base + 0x6ed26c);
-    if (!load(target)) return -2;
-    // Mirror the renderer notifications performed by CDeviceConfig::ChangePerformance
-    // immediately after LoadDeviceConfigByPerformance succeeds.
-    const uintptr_t manager_slot = base + 0xd114a0;
-    const uintptr_t manager = *reinterpret_cast<volatile uintptr_t *>(manager_slot);
-    if (manager) {
-        const uintptr_t scene_manager = *reinterpret_cast<volatile uintptr_t *>(manager + 0x78);
-        if (scene_manager) {
-            const uintptr_t render_config = *reinterpret_cast<volatile uintptr_t *>(scene_manager + 0x130);
-            if (render_config) {
-                using NotifyProfile = void (*)(void *, int);
-                auto notify = reinterpret_cast<NotifyProfile>(base + 0x472700);
-                notify(reinterpret_cast<void *>(render_config), target);
-            }
-            const uintptr_t scene = *reinterpret_cast<volatile uintptr_t *>(scene_manager + 0x40);
-            if (scene) {
-                using NotifyScene = void (*)(void *, int);
-                auto notify = reinterpret_cast<NotifyScene>(base + 0x48ad90);
-                notify(reinterpret_cast<void *>(scene), 0);
-            }
-        }
-    }
-    return current_graphics(base) == target ? target + 1 : -3;
-}
+    // Use the game's own ChangePerformance(direction) entry point.
+    // It validates the transition, loads the selected XML profile, updates
+    // the current-performance global, resets FPS profiling and notifies
+    // the renderer/scene using the exact native sequence used by the game.
+    using ChangePerformance = int (*)(int);
+    auto change = reinterpret_cast<ChangePerformance>(base + 0x6ed4b8);
+    const int current = current_graphics(base);
+    if (current == target) return target + 1;
+    const int direction = target > current ? 1 : -1;
+    if (!change(direction)) return -2;
+    const int updated = current_graphics(base);
+    return updated == current + direction ? updated + 1 : -3;
 }
 
 extern "C" JNIEXPORT jint JNICALL
