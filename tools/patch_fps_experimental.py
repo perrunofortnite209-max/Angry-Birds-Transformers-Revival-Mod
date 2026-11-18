@@ -101,11 +101,12 @@ def main() -> None:
         bad = check.testzip()
         if bad:
             raise RuntimeError(f"ZIP/APK corrupto en entrada {bad}")
-        for path, spec in TARGETS.items():
-            data = check.read(path)
-            off = int(next(x["instruction_file_offset"] for x in report["patches"] if x["path"] == path), 16)
-            if data[off:off+4] != spec["new"]:
-                raise RuntimeError(f"Verificación del APK generado falló: {path}")
+        for patch in report["patches"]:
+            data = check.read(patch["path"])
+            off = int(patch["instruction_file_offset"], 16)
+            expected = bytes.fromhex(patch["after"])
+            if data[off:off+4] != expected:
+                raise RuntimeError(f"Verificación del APK generado falló: {patch['path']} offset {off:#x}")
     report["patched_unsigned_apk_sha256"] = sha256(args.output_apk.read_bytes())
     report["patched_apk_size"] = args.output_apk.stat().st_size
     report["apk_zip_test"] = "passed"
