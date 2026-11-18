@@ -67,6 +67,42 @@ def main():
                         off=fa-textbase
                         for ins in md.disasm(text[off:off+fs],fa):
                             out.append(f"  {ins.address:08x}: {ins.mnemonic:8} {ins.op_str}")
+        # Resolve exact ADRP+ADD addresses, not every string sharing the same 4 KB page.
+        exact_refs = {}
+        for idx, ins in enumerate(insns):
+            if ins.mnemonic != "adrp" or len(ins.operands) < 2:
+                continue
+            dst = ins.operands[0]
+            pageop = ins.operands[1]
+            if dst.type != arm64_const.ARM64_OP_REG or pageop.type != arm64_const.ARM64_OP_IMM:
+                continue
+            reg = dst.reg
+            page = int(pageop.imm) & ~0xfff
+            for nxt in insns[idx + 1:min(len(insns), idx + 5)]:
+                if nxt.mnemonic not in ("add", "adds") or len(nxt.operands) < 3:
+                    continue
+                if (nxt.operands[0].type == arm64_const.ARM64_OP_REG and
+                    nxt.operands[1].type == arm64_const.ARM64_OP_REG and
+                    nxt.operands[0].reg == reg and nxt.operands[1].reg == reg and
+                    nxt.operands[2].type == arm64_const.ARM64_OP_IMM):
+                    target = page + int(nxt.operands[2].imm)
+                    for va, value, secname in found:
+                        if va == target:
+                            owner = "unknown"
+                            for fa, fs, fn in funcs:
+                                if fa <= ins.address and (fs == 0 or ins.address < fa + fs):
+                                    owner = fn
+                            exact_refs.setdefault(va, []).append((ins.address, nxt.address, owner))
+                    break
+        out.append("\\n## Exact graphics/config string references (ADRP + ADD)")
+        for va, value, secname in found:
+            refs = exact_refs.get(va, [])
+            if refs:
+                out.append(f"EXACT_STRING 0x{va:x} {value}")
+                for adrp_at, add_at, owner in refs:
+                    out.append(f"  ADRP 0x{adrp_at:x} + ADD 0x{add_at:x} function={owner}")
+                    for near in insns[max(0, next((i for i, x in enumerate(insns) if x.address == adrp_at), 0)-3):min(len(insns), next((i for i, x in enumerate(insns) if x.address == add_at), 0)+9)]:
+                        out.append(f"    {near.address:08x}: {near.mnemonic:8} {near.op_str}")
         for va,s,secname in found:
             page=va & ~0xfff
             candidates=[]
