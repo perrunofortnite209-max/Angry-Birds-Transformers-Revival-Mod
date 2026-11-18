@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Trace AArch64 code references to CRenderManager scale-related globals."""
+"""Trace relocation-backed render-scale globals and the ScaleRenderTargetRes data table."""
 from __future__ import annotations
 import io, sys, zipfile, struct
 from pathlib import Path
 from elftools.elf.elffile import ELFFile
+from elftools.elf.relocation import RelocationSection
 from capstone import Cs, CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN, CS_OP_IMM, CS_OP_MEM, CS_OP_REG
 
 apk, out = map(Path, sys.argv[1:3])
@@ -11,68 +12,71 @@ with zipfile.ZipFile(apk) as z:
     raw = z.read("lib/arm64-v8a/libABBS.so")
 elf = ELFFile(io.BytesIO(raw))
 targets = {
-    0xd418c8: "m_fScale3D_X",
-    0xd418d0: "m_fScale3D_Y",
-    0xd418d8: "m_fDynResMin",
-    0xd418e0: "m_iShadowMapSize",
+    0xd418c8: "m_fScale3D_X", 0xd418d0: "m_fScale3D_Y",
+    0xd418d8: "m_fDynResMin", 0xd418e0: "m_iShadowMapSize",
+    0x483f80: "ScaleRenderTargetRes",
 }
-md = Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN)
-md.detail = True
+lines = ["Render-scale relocation and data-structure trace",
+         f"ELF machine={elf['e_machine']} class={elf.elfclass}", ""]
+# Relocations reveal the exact symbol/addend used to initialize pointer slots.
+lines.append("## Relocations involving scale globals or the render-scale callback")
+for sec in elf.iter_sections():
+    if not isinstance(sec, RelocationSection):
+        continue
+    symtab = elf.get_section(sec['sh_link'])
+    for rel in sec.iter_relocations():
+        off = int(rel['r_offset'])
+        symidx = int(rel['r_info_sym'])
+        sym = symtab.get_symbol(symidx) if symidx < symtab.num_symbols() else None
+        name = sym.name if sym else "<no-symbol>"
+        sval = int(sym['st_value']) if sym else 0
+        addend = int(rel['r_addend']) if rel.is_RELA() else None
+        related = any(sval == t or (addend is not None and (sval + addend) == t) for t in targets)
+        near_slots = 0xe5f70 <= off <= 0xe6000
+        if related or near_slots:
+            typ = rel['r_info_type']
+            lines.append(f"{sec.name}: place={off:#x} type={typ} symbol={name!r} sym_value={sval:#x} addend={addend!r} resolved={(sval + addend if addend is not None else sval):#x}")
+# Decode the packed object/table around the unaligned callback pointer.
+ro = elf.get_section_by_name(".rodata")
+if ro:
+    va, data = int(ro['sh_addr']), ro.data()
+    start_va, end_va = 0x117e00, 0x117ec0
+    if va <= start_va < va + len(data):
+        start, end = start_va-va, min(end_va-va, len(data))
+        blob = data[start:end]
+        lines += ["", "## .rodata packed table at 0x117e00",
+                  "offset | u32 | float | u64"]
+        for p in range(0, len(blob)-7, 4):
+            u32 = struct.unpack_from("<I", blob, p)[0]
+            f32 = struct.unpack_from("<f", blob, p)[0]
+            u64 = struct.unpack_from("<Q", blob, p)[0] if p % 8 == 0 and p+8 <= len(blob) else 0
+            lines.append(f"{start_va+p:#x} | {u32:#010x} | {f32:.7g} | {u64:#018x}")
+# Find code that materializes addresses inside the table's page and then accesses them.
+md = Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN); md.detail = True
 textsec = elf.get_section_by_name(".text")
-base, code = int(textsec.header.sh_addr), textsec.data()
+base, code = int(textsec['sh_addr']), textsec.data()
 insns = list(md.disasm(code, base))
-lines = ["AArch64 references to render-scale globals (static/read-only)", f".text VA={base:#x} size={len(code):#x}", ""]
-# ADRP establishes a 4-KiB page; follow nearby instructions that use that register.
+lines += ["", "## Code references to .rodata page 0x117000"]
 for i, ins in enumerate(insns):
     if ins.mnemonic != "adrp" or len(ins.operands) < 2:
         continue
-    regop, immop = ins.operands[0], ins.operands[1]
-    if regop.type != CS_OP_REG or immop.type != CS_OP_IMM:
+    if ins.operands[0].type != CS_OP_REG or ins.operands[1].type != CS_OP_IMM:
         continue
-    reg = ins.reg_name(regop.reg)
-    page = int(immop.imm)
-    for nxt in insns[i+1:i+9]:
+    reg = ins.reg_name(ins.operands[0].reg)
+    page = int(ins.operands[1].imm)
+    if page != 0x117000:
+        continue
+    seq = []
+    for nxt in insns[i+1:i+10]:
         if nxt.mnemonic in ("bl", "blr", "b", "ret"):
             break
+        seq.append(f"{nxt.address:#x}: {nxt.mnemonic} {nxt.op_str}")
         for op in nxt.operands:
-            if op.type != CS_OP_MEM or op.mem.base == 0:
-                continue
-            if nxt.reg_name(op.mem.base) != reg:
-                continue
-            effective = page + int(op.mem.disp)
-            for addr, name in targets.items():
-                if effective == addr:
-                    lines.append(f"{ins.address:#x}: {ins.mnemonic} {ins.op_str}; {nxt.address:#x}: {nxt.mnemonic} {nxt.op_str} => {name} [{addr:#x}]")
-# Search data sections for pointers to scale helpers and globals.
-lines.append("\n## Data pointer hits")
-needles = {0x483f80:"ScaleRenderTargetRes", **targets}
-for sec in elf.iter_sections():
-    if not (int(sec.header.sh_flags) & 0x2):
-        continue
-    data, va = sec.data(), int(sec.header.sh_addr)
-    for addr, name in needles.items():
-        needle = struct.pack("<Q", addr)
-        pos = 0
-        while True:
-            off = data.find(needle, pos)
-            if off < 0: break
-            lines.append(f"{sec.name}+{off:#x} VA={va+off:#x} -> {name} ({addr:#x})")
-            pos = off + 1
-# Include bytes and decoded qwords around the known function-pointer table.
-lines.append("\n## .rodata around ScaleRenderTargetRes pointer (VA 0x117e4e)")
-for sec in elf.iter_sections():
-    va = int(sec.header.sh_addr)
-    if va <= 0x117e4e < va + int(sec.header.sh_size):
-        off = 0x117e4e - va
-        start, end = max(0, off-64), min(len(sec.data()), off+96)
-        blob = sec.data()[start:end]
-        lines.append(f"section={sec.name} range={va+start:#x}-{va+end:#x}")
-        lines.append(blob.hex())
-        for p in range(0, len(blob)-7, 8):
-            val = struct.unpack_from("<Q", blob, p)[0]
-            if val:
-                lines.append(f"{va+start+p:#x}: {val:#x}")
-        break
+            if op.type == CS_OP_MEM and op.mem.base and nxt.reg_name(op.mem.base) == reg:
+                ea = page + int(op.mem.disp)
+                if 0x117e00 <= ea <= 0x117ec0:
+                    lines.append(f"ADRP {ins.address:#x} -> {ea:#x} via {reg}; " + " | ".join(seq))
+                    break
 out.parent.mkdir(parents=True, exist_ok=True)
-out.write_text("\n".join(lines)+"\n", encoding="utf-8")
+out.write_text("\n".join(lines) + "\n", encoding="utf-8")
 print(f"Wrote {out}")
