@@ -183,6 +183,8 @@ jobs:
             ${{ runner.temp }}/out/pak-inventory.txt
             ${{ runner.temp }}/out/deviceconfigs-report.txt
             ${{ runner.temp }}/out/deviceconfigs-extracted/**
+            ${{ runner.temp }}/out/deviceconfigs-decoded-report.txt
+            ${{ runner.temp }}/out/deviceconfigs-decoded/**
             ${{ runner.temp }}/out/vfx-xml-archive-scan.txt
             ${{ runner.temp }}/out/vfxlimitconfig.decoded.xml
             ${{ runner.temp }}/out/xml-all-extracted/**
