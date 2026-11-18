@@ -18,13 +18,13 @@ CATEGORIES = {
 }
 FOCUS = [
     re.compile(p, re.I) for p in (
-        r"CApp.*ProcessFrame",
-        r"CApp.*DoRender",
-        r"CGame.*RenderFrame",
-        r"CRenderManager.*RenderFrame",
-        r"CApp.*DoPresent",
-        r"CApp.*GetDesiredFramerate",
-        r"CDeviceConfig.*GetDesiredFramerate",
+        r"_ZN4CApp12ProcessFrameEv",
+        r"_ZN4CApp8DoRenderEv",
+        r"_ZN5CGame11RenderFrameEv",
+        r"_ZN13CRenderManager11RenderFrameEv",
+        r"_ZN4CApp9DoPresentEv",
+        r"_ZN4CApp19GetDesiredFramerateEv",
+        r"_ZN13CDeviceConfig19GetDesiredFramerateEv",
         r"LimitFPSWithSleep",
         r"ExientGLSurfaceView|nativeDrawFrame",
     )
