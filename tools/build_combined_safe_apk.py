@@ -135,7 +135,7 @@ def main():
   with zipfile.ZipFile(a.out) as check:
    bad=check.testzip()
    if bad: raise RuntimeError(f"ZIP dañado: {bad}")
-   after={n:sha(check.read(n)) for n in check.namelist() if n!="AndroidManifest.xml" and not is_dex(n) and n not in TARGETS and not is_icon(n) and not is_sig(n)}
+   after={n:sha(check.read(n)) for n in check.namelist() if n!="AndroidManifest.xml" and not is_dex(n) and n not in TARGETS and n not in native_payloads and not is_icon(n) and not is_sig(n)}
    if before!=after: raise RuntimeError("Cambió una entrada ajena a DEX/libABBS")
    for p in TARGETS:
     for fn,sig,off,old,new in TARGETS[p]:
