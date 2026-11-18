@@ -62,8 +62,11 @@ jobs:
           with zipfile.ZipFile(apk) as z:
               rows = [f"{x.filename} | {x.file_size} bytes" for x in z.infolist()
                       if not x.is_dir() and x.filename.lower().endswith(".pak")]
-          Path(report).write_text("\n".join(rows) + "\n", encoding="utf-8")
-          print("\n".join(rows))
+          Path(report).write_text("
+".join(rows) + "
+", encoding="utf-8")
+          print("
+".join(rows))
           PY
       - name: Extract and inspect deviceconfigs.pak
         run: |
@@ -76,10 +79,15 @@ jobs:
           with zipfile.ZipFile(apk) as z:
               blob = z.read("assets/data/deviceconfigs.pak")
           lines = parse_pak(blob, "assets/data/deviceconfigs.pak", out_dir)
-          Path(report).write_text("\n".join(lines) + "\n", encoding="utf-8")
-          print("\n".join(lines[:120]))
+          Path(report).write_text("
+".join(lines) + "
+", encoding="utf-8")
+          print("
+".join(lines[:120]))
           PY
-      - name: Trace particle manager internals (read-only)\n        run: python tools/trace_particle_manager_detail.py "$APK" "$RUNNER_TEMP/out/particle-manager-detail.txt"\n      - name: Upload text report
+      - name: Trace particle manager internals (read-only)
+        run: python tools/trace_particle_manager_detail.py "$APK" "$RUNNER_TEMP/out/particle-manager-detail.txt"
+      - name: Upload text report
         uses: actions/upload-artifact@v4
         with:
           name: native-graphics-config-xrefs
@@ -88,7 +96,8 @@ jobs:
             ${{ runner.temp }}/out/performance-profile-table.txt
             ${{ runner.temp }}/out/render-scale-reference-trace.txt
             ${{ runner.temp }}/out/render-scale-global-references.txt
-            ${{ runner.temp }}/out/explosion-particle-hotspots.txt\n            ${{ runner.temp }}/out/particle-manager-detail.txt
+            ${{ runner.temp }}/out/explosion-particle-hotspots.txt
+            ${{ runner.temp }}/out/particle-manager-detail.txt
             ${{ runner.temp }}/out/pak-inventory.txt
             ${{ runner.temp }}/out/deviceconfigs-report.txt
             ${{ runner.temp }}/out/deviceconfigs-extracted/**
