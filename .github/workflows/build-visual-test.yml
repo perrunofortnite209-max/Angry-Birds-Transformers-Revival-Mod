@@ -30,7 +30,9 @@ jobs:
           python-version: "3.12"
       - uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools;build-tools;35.0.0'
+          packages: |
+            platform-tools
+            build-tools;35.0.0
           accept-android-sdk-licenses: true
 
       - name: Install APK and image tooling
