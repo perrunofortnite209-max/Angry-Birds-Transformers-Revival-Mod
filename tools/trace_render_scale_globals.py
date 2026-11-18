@@ -152,6 +152,17 @@ if symtab:
         size = int(sym["st_size"])
         if start and size:
             symbols.append((start, start + size, sym.name))
+
+# Dump full debug XML parser and config loading routines after building the symbol table.
+lines += ["", "## Full configuration parser and device-config loader"]
+for start, end, name in symbols:
+    if ("SetDebugTweakablesFromXML" in name or "LoadDeviceSpecific" in name or
+            "LoadDeviceConfigFile" in name or "LoadDeviceConfigByPerformance" in name):
+        if end - start > 0x5000:
+            end = start + 0x5000
+        lines.append(f"\n### {name} [{start:#x}-{end:#x}]")
+        for ins in md.disasm(code[start-base:end-base], start):
+            lines.append(f"{ins.address:08x}: {ins.mnemonic:<8} {ins.op_str}")
 for addr in focus_addresses:
     owner = next(((s, e, n) for s, e, n in symbols if s <= addr < e), None)
     if owner:
@@ -238,12 +249,18 @@ for i, ins in enumerate(insns):
     page = int(ins.operands[1].imm)
     if page != 0xd41000:
         continue
+    reg_offset = 0
     for nxt in insns[i+1:i+12]:
         if nxt.mnemonic in ("bl", "blr", "b", "ret"):
             break
+        if (nxt.mnemonic in ("add", "adds") and len(nxt.operands) >= 3 and
+            nxt.operands[0].type == CS_OP_REG and nxt.operands[1].type == CS_OP_REG and
+            nxt.reg_name(nxt.operands[0].reg) == reg and nxt.reg_name(nxt.operands[1].reg) == reg and
+            nxt.operands[2].type == CS_OP_IMM):
+            reg_offset += int(nxt.operands[2].imm)
         for op in nxt.operands:
             if op.type == CS_OP_MEM and op.mem.base and nxt.reg_name(op.mem.base) == reg:
-                ea = page + int(op.mem.disp)
+                ea = page + reg_offset + int(op.mem.disp)
                 if ea in source_fields:
                     owner = next(((s,e,n) for s,e,n in symbols if s <= ins.address < e), None)
                     owner_name = owner[2] if owner else "<no symbol>"
