@@ -176,10 +176,18 @@ def patch(decoded: Path, report: dict):
 """
     apply_graphics=r"""
 .method public applyRevivalGraphics(I)V
-    .locals 5
+    .locals 7
+    # Read the live engine profile first. Negative values identify a missing
+    # engine library or a bad native getter before attempting any mutation.
+    invoke-static {}, Lcom/rovio/angrybirdstransformers/RevivalNative;->getGraphicsLevel()I
+    move-result v1
+    if-gez v1, :graphics_engine_ready
+    move v0, v1
+    goto :graphics_diagnostic_failed
+    :graphics_engine_ready
     invoke-static {p1}, Lcom/rovio/angrybirdstransformers/RevivalNative;->setGraphicsLevel(I)I
     move-result v0
-    if-lez v0, :graphics_failed
+    if-lez v0, :graphics_read_after_failure
     const-string v1, "abt_revival_mod"
     const/4 v2, 0x0
     invoke-virtual {p0, v1, v2}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
@@ -205,8 +213,23 @@ def patch(decoded: Path, report: dict):
     :graphics_extra
     const-string v3, "Calidad extraalta aplicada."
     goto :graphics_toast
-    :graphics_failed
-    const-string v3, "El motor no pudo aplicar el perfil gráfico."
+    :graphics_read_after_failure
+    invoke-static {}, Lcom/rovio/angrybirdstransformers/RevivalNative;->getGraphicsLevel()I
+    move-result v1
+    :graphics_diagnostic_failed
+    new-instance v2, Ljava/lang/StringBuilder;
+    const-string v3, "Error gráfico "
+    invoke-direct {v2, v3}, Ljava/lang/StringBuilder;-><init>(Ljava/lang/String;)V
+    invoke-static {v0}, Ljava/lang/Integer;->toString(I)Ljava/lang/String;
+    move-result-object v3
+    invoke-virtual {v2, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    const-string v3, " | nivel actual "
+    invoke-virtual {v2, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invoke-static {v1}, Ljava/lang/Integer;->toString(I)Ljava/lang/String;
+    move-result-object v3
+    invoke-virtual {v2, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invoke-virtual {v2}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+    move-result-object v3
     :graphics_toast
     const/4 v2, 0x0
     invoke-static {p0, v3, v2}, Landroid/widget/Toast;->makeText(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;
