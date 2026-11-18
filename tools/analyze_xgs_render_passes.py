@@ -28,6 +28,10 @@ TARGETS = [
     ("CXGSDisplayOGL::CreateRenderTargets", re.compile(r"_ZN14CXGSDisplayOGL19CreateRenderTargetsEv$")),
     ("CRenderManager::Get3DBackbufferResolution", re.compile(r"_ZNK14CRenderManager25Get3DBackbufferResolutionEPiS0_$")),
     ("CRenderManager::ScaleRenderTargetRes", re.compile(r"_ZNK14CRenderManager20ScaleRenderTargetResEiiRiS0_$")),
+    ("CRenderManager::GetScaledScreenRes", re.compile(r"_ZNK14CRenderManager18GetScaledScreenResEiRiS0_$")),
+    ("CRenderManager::UpdateDynamicRes", re.compile(r"_ZN14CRenderManager16UpdateDynamicResEfff$")),
+    ("CRenderManager::Initialise", re.compile(r"_ZN14CRenderManager10InitialiseEv$")),
+    ("CRenderManager::CreateMainSceneRT", re.compile(r"_ZN14CRenderManager17CreateMainSceneRTEv$")),
     ("CXGSRenderDeviceOGL::GetScreenWidth", re.compile(r"_ZN19CXGSRenderDeviceOGL14GetScreenWidthEN11EXGSDisplay4EnumE$")),
     ("CXGSRenderDeviceOGL::GetScreenHeight", re.compile(r"_ZN19CXGSRenderDeviceOGL15GetScreenHeightEN11EXGSDisplay4EnumE$")),
     ("CXGSDisplayProviderGLES::OnResize", re.compile(r"_ZN23CXGSDisplayProviderGLES8OnResizeEv$")),
@@ -68,6 +72,10 @@ out = [
 # Resolve direct callers of the render-scale and backbuffer helpers.
 xref_targets = {
     0x483f80: "CRenderManager::ScaleRenderTargetRes",
+    0x4837b0: "CRenderManager::GetScaledScreenRes",
+    0x484d34: "CRenderManager::UpdateDynamicRes",
+    0x483204: "CRenderManager::Initialise",
+    0x48354c: "CRenderManager::CreateMainSceneRT",
     0x484b38: "CRenderManager::Get3DBackbufferResolution",
     0x844158: "CXGSDisplayOGL::CreateRenderTargets",
     0x844660: "CXGSDisplayOGL::PresentScene",
