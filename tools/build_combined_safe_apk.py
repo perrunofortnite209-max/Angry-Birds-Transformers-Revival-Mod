@@ -12,11 +12,11 @@ EXPECTED = "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013"
 
 def sha(b): return hashlib.sha256(b).hexdigest()
 def run(cmd): print("+", " ".join(map(str,cmd)), flush=True); subprocess.run(list(map(str,cmd)),check=True)
-def load_patch(repo):
+def load_visual_helpers(repo):
  p=repo/"tools/build_visual_test_apk.py"
  spec=importlib.util.spec_from_file_location("abt_visual_helpers",p)
  mod=importlib.util.module_from_spec(spec); sys.modules[spec.name]=mod; spec.loader.exec_module(mod)
- return mod.patch_welcome
+ return mod
 def load_controls(repo):
  p=repo/"tools/patch_revival_controls.py"
  spec=importlib.util.spec_from_file_location("abt_revival_controls",p)
@@ -53,8 +53,9 @@ def main():
  a=ap.parse_args(); a.out.parent.mkdir(parents=True,exist_ok=True)
  src=a.apk.read_bytes()
  if sha(src)!=EXPECTED: raise RuntimeError("El APK de entrada no coincide con el original 2.42.0 analizado")
- report={"method":"DEX transplant + runtime FPS/graphics JNI bridge","target_fps":"user-selectable","pak_modified":False,"manifest_modified":True,"resources_modified":True,"icon_safe_scale":1.0,"icon_entries":[],"welcome_first_launch":True,"fps_patches":[],"native_fps_constants_modified":False,"fps_policy":"original engine defaults until a user-selected runtime cap is applied"}
- welcome=load_patch(a.repo.resolve())
+ report={"method":"DEX transplant + runtime FPS/graphics JNI bridge + conservative VFX particle thresholds","target_fps":"user-selectable","pak_modified":True,"manifest_modified":True,"resources_modified":True,"icon_safe_scale":1.0,"icon_entries":[],"welcome_first_launch":True,"fps_patches":[],"native_fps_constants_modified":False,"fps_policy":"original engine defaults until a user-selected runtime cap is applied","vfx_policy":"lower particle-count thresholds for VFX config ID 5; visual effects are retained, but the engine can shed particle load earlier"}
+ visual=load_visual_helpers(a.repo.resolve())
+ welcome=visual.patch_welcome
  controls=load_controls(a.repo.resolve())
  native_payloads={"lib/arm64-v8a/libabtmod.so":a.native_arm64.read_bytes(),"lib/armeabi-v7a/libabtmod.so":a.native_armv7.read_bytes()}
  with tempfile.TemporaryDirectory(prefix="abt-combined-") as td:
@@ -75,6 +76,18 @@ def main():
   tree.write(manifest_path,encoding="utf-8",xml_declaration=True)
   report["version_code"]={"previous":old_code,"new":new_code,"update_in_place":True}
   run(["apktool","b","--use-aapt2",str(decoded),"-o",str(rebuilt)])
+  # Patch only the validated VFXLimitConfig.xml entry in the rebuilt APK.
+  # The helper checks the original thresholds and verifies the XOX2/KPX round-trip.
+  vfx_rebuilt=td/"rebuilt-vfx.apk"
+  visual.patch_paks(rebuilt,vfx_rebuilt,a.repo.resolve(),report,include=("vfx",))
+  with zipfile.ZipFile(rebuilt) as base_zip, zipfile.ZipFile(vfx_rebuilt) as patched_zip:
+   base_paks={n for n in base_zip.namelist() if n.lower().endswith(".pak")}
+   patched_paks={n for n in patched_zip.namelist() if n.lower().endswith(".pak")}
+   if base_paks != patched_paks: raise RuntimeError("El conjunto de PAK cambió durante el parche VFX")
+   pak_payloads={n:patched_zip.read(n) for n in sorted(base_paks) if sha(base_zip.read(n)) != sha(patched_zip.read(n))}
+   if len(pak_payloads) != 1: raise RuntimeError(f"Se esperaba exactamente un PAK modificado por VFX; encontrados: {list(pak_payloads)}")
+   if len(report.get("resources",[])) != 1 or report["resources"][0].get("purpose") != "particle-pressure quality thresholds":
+    raise RuntimeError(f"El informe VFX no confirma un único parche de partículas: {report.get('resources')}")
   with zipfile.ZipFile(rebuilt) as z:
    dex={n:z.read(n) for n in z.namelist() if is_dex(n)}
    manifest_payload=z.read("AndroidManifest.xml")
@@ -91,7 +104,7 @@ def main():
     for info in original.infolist():
      n=info.filename
      if is_sig(n): continue
-     payload=dex[n] if is_dex(n) else manifest_payload if n=="AndroidManifest.xml" else original.read(n)
+     payload=dex[n] if is_dex(n) else manifest_payload if n=="AndroidManifest.xml" else pak_payloads[n] if n in pak_payloads else original.read(n)
      if is_icon(n):
       from PIL import Image
       with Image.open(io.BytesIO(original.read(n))) as old_icon: w,h=old_icon.size
@@ -104,11 +117,14 @@ def main():
   with zipfile.ZipFile(a.out) as check:
    bad=check.testzip()
    if bad: raise RuntimeError(f"ZIP dañado: {bad}")
-   after={n:sha(check.read(n)) for n in check.namelist() if n!="AndroidManifest.xml" and not is_dex(n) and n not in native_payloads and not is_icon(n) and not is_sig(n)}
-   if before!=after: raise RuntimeError("Cambió una entrada ajena a DEX/libABBS")
+   after={n:sha(check.read(n)) for n in check.namelist() if n!="AndroidManifest.xml" and not is_dex(n) and n not in native_payloads and n not in pak_payloads and not is_icon(n) and not is_sig(n)}
+   if before!=after: raise RuntimeError("Cambió una entrada ajena a DEX/libABBS/PAK VFX")
+   for pak_name,pak_data in pak_payloads.items():
+    if check.read(pak_name)!=pak_data: raise RuntimeError(f"El PAK VFX final no coincide con el PAK validado: {pak_name}")
+   report["vfx_pak_entries"]=[{"path":name,"size":len(data),"sha256":sha(data)} for name,data in pak_payloads.items()]
    for native_name,native_data in native_payloads.items():
     if check.read(native_name)!=native_data: raise RuntimeError(f"Native bridge mismatch: {native_name}")
-   report["unchanged_entries"]=len(before); report["pak_and_unrelated_entries_sha256_identical"]=True; report["only_resource_changes_are_launcher_icon_pngs"]=True; report["apk_zip_test"]="passed"
+   report["unchanged_entries"]=len(before); report["unrelated_entries_sha256_identical"]=True; report["only_game_asset_change_is_validated_vfx_particle_thresholds"]=True; report["only_android_resource_changes_are_launcher_icon_pngs"]=True; report["apk_zip_test"]="passed"
  report["output_sha256"]=sha(a.out.read_bytes()); report["output_size"]=a.out.stat().st_size
  rp=a.out.parent/"ABT-REVIVAL-COMBINED.report.json"; rp.write_text(json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
  print(json.dumps(report,indent=2,ensure_ascii=False))
