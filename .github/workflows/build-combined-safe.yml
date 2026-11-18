@@ -28,11 +28,13 @@ jobs:
         with:
           packages: platform-tools
           accept-android-sdk-licenses: true
+      - name: Install Python image dependency
+        run: python -m pip install --upgrade pillow
       - name: Install APK tooling
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends curl python3-pil
+          sudo apt-get install -y --no-install-recommends curl
           sdkmanager --install 'build-tools;35.0.0'
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
           curl -fL --retry 3 https://github.com/iBotPeaches/Apktool/releases/download/v2.11.1/apktool_2.11.1.jar -o "$RUNNER_TEMP/apktool.jar"
@@ -43,6 +45,7 @@ jobs:
           set -euo pipefail
           mkdir -p input output
           curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/com.rovio.angrybirdstransformers-24200.apk" -o input/original.apk
+          curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/f3313d17-ccf7-4c82-8007-c68b4233b65d.png" -o input/user-icon.png
           echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  input/original.apk" | sha256sum -c -
       - name: Build combined DEX and native patch
         run: |
