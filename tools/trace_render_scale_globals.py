@@ -223,7 +223,7 @@ for i, ins in enumerate(insns):
         continue
     reg = ins.reg_name(ins.operands[0].reg)
     page = int(ins.operands[1].imm)
-    if page != 0xd41000:
+    if page != 0xd410000:
         continue
     for nxt in insns[i+1:i+12]:
         if nxt.mnemonic in ("bl", "blr", "b", "ret"):
