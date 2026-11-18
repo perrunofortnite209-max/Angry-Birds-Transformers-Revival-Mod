@@ -17,6 +17,25 @@ Status: static APK inspection partially completed; in-game menu integration is n
 - `XGSActivity.onCreate()` adds camera-input and virtual-keyboard views after the GL surface has been installed. Those are auxiliary engine views, not evidence of a native Android main-menu widget system.
 - The APK contains `libABBS.so` for ARM64 and ARM32. The actual in-game menu implementation has not yet been mapped to native symbols or assets.
 
+## Native front-end/UI discovery (static string scan)
+
+The ARM64 and ARM32 `libABBS.so` string tables contain matching front-end identifiers, including:
+
+- `CSettingsScreen` and `ShowSettingsScreen`
+- `CWindow_PlayButton` and `CWindow_MainSplashScreen`
+- `FrontendLoadingScreen` and `DeveloperMenuScreen`
+- Multiple `EScreen_FE_*` front-end screen identifiers
+- UI resource references such as `UIPAK:textures/uishopscreenatlas.atlas` and `XMLPAK:Parameters/AccessoryShopScreen.xml`
+
+The APK also contains these relevant packed assets:
+
+- `assets/data/ui/ui_bundles.pak`
+- `assets/data/ui/ui_additional.pak.manifest`
+- `assets/data/uisplash.pak`
+- `assets/data/uienv.pak`
+
+These are concrete leads that the game's front-end and settings screens are represented in the native engine/resource system. A string-table hit does not prove a callable API or reveal the scene graph, so no native UI patch has been made yet. Next, inspect the PAK format/manifest and trace the native references and event handlers for the existing front-end settings and main splash screens.
+
 ## Integration implications
 
 - The requested UI is a button integrated into the game's existing main menu. A floating Android overlay is explicitly out of scope.
