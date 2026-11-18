@@ -1,0 +1,48 @@
+name: Analyze native graphics configuration readers
+on:
+  push:
+    branches: [feature/full-revival-mod]
+    paths:
+      - "tools/analyze_graphics_config_xrefs.py"
+      - ".github/workflows/graphics-config-native-analysis.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-revival-mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ELF analysis dependencies
+        run: python -m pip install pyelftools capstone
+      - name: Download and verify original APK privately
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/private" "$RUNNER_TEMP/native" "$RUNNER_TEMP/out"
+          gh release download game --repo "$GITHUB_REPOSITORY" --pattern "*.apk" --dir "$RUNNER_TEMP/private"
+          APK="$(find "$RUNNER_TEMP/private" -maxdepth 1 -name '*.apk' -print -quit)"
+          test -n "$APK"
+          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  $APK" | sha256sum -c -
+          python - "$APK" "$RUNNER_TEMP/native/libABBS-arm64.so" <<'PY'
+          import sys,zipfile
+          from pathlib import Path
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              Path(sys.argv[2]).write_bytes(z.read("lib/arm64-v8a/libABBS.so"))
+          PY
+      - name: Find native graphics config readers
+        run: python tools/analyze_graphics_config_xrefs.py "$RUNNER_TEMP/native/libABBS-arm64.so" "$RUNNER_TEMP/out/graphics-config-xrefs.txt"
+      - name: Upload text report
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-graphics-config-xrefs
+          path: "$RUNNER_TEMP/out/graphics-config-xrefs.txt"
+          if-no-files-found: error
+          retention-days: 7
