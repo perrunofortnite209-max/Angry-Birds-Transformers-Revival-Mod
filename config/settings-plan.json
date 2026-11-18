@@ -2,7 +2,16 @@
   "schemaVersion": 1,
   "project": "Angry Birds Transformers Revival Mod",
   "status": "design-only",
-  "notice": "This file is a specification. The game does not read it yet.",
+  "notice": "Specification only: the game does not read this file until the APK integration is implemented.",
+  "branding": {
+    "appName": "Angry Birds Transformers Revival Mod",
+    "appIcon": {
+      "replacementRequested": true,
+      "sourceAsset": null,
+      "status": "waiting-for-user-icon",
+      "targets": ["launcher icon", "adaptive icon", "legacy icon"]
+    }
+  },
   "welcome": {
     "enabled": true,
     "title": "Angry Birds Transformers Revival Mod",
@@ -13,55 +22,25 @@
   },
   "frameRate": {
     "default": "system",
-    "choices": [
-      30,
-      60,
-      90,
-      120,
-      144
-    ],
+    "choices": [30, 60, 90, 120, 144],
     "availabilityPolicy": "only-offer-device-and-engine-validated-modes",
-    "fallbackFps": [
-      60,
-      30
-    ],
+    "fallbackFps": [60, 30],
     "status": "planned"
   },
   "graphics": {
     "defaultProfile": "original",
-    "textureQuality": [
-      "original",
-      "reduced"
-    ],
-    "effects": [
-      "original",
-      "reduced"
-    ],
-    "shadows": [
-      "original",
-      "reduced",
-      "off"
-    ],
-    "renderScale": [
-      "original",
-      "reduced"
-    ],
     "status": "research",
     "enabledToggle": {
       "default": false,
       "label": "PARCHE GRÁFICO",
-      "placement": "alongside FPS controls and other mod options",
+      "placement": "native settings area alongside FPS controls and other mod options",
       "behavior": "original profile when off; optimized profile when on",
       "apply": "on next game launch unless runtime reload is verified",
       "status": "planned"
     }
   },
   "display": {
-    "sync": [
-      "system-default",
-      "on",
-      "off"
-    ],
+    "sync": ["system-default", "on", "off"],
     "requestSupportedRefreshRate": true,
     "status": "research"
   },
@@ -80,11 +59,11 @@
   "settingsEntry": {
     "enabled": true,
     "screen": "EScreen_FE_Settings",
-    "placement": "same native settings list, alongside the FPS limiter/unlock controls and other mod options",
+    "placement": "same native settings area, alongside FPS controls and other mod options",
     "label": "MOD SETTINGS",
-    "opens": "mod settings controls in the same native settings area",
+    "opens": "native feature configuration screen",
     "preserveOriginalOptions": true,
     "floatingOverlay": false,
-    "status": "research"
+    "status": "integration-research"
   }
 }
