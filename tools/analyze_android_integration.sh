@@ -32,6 +32,38 @@ REPORT="$OUT/android-integration-report.txt"
     grep -iE '(menu|ui|interface|button|settings|font|screen)' |
     sed "s#^$DECODE/##" | head -n 240 || true
   echo
+  echo "=== Packed UI resource inventory and signatures (no payloads uploaded) ==="
+  find "$DECODE/assets" -type f \\( -iname '*.pak' -o -iname '*.manifest' \\) -print 2>/dev/null | sort |
+    while IFS= read -r asset; do
+      echo "-- ${asset#"$DECODE/"} --"
+      stat -c 'size_bytes=%s' "$asset" || true
+      file "$asset" || true
+      od -An -tx1 -N48 "$asset" 2>/dev/null || true
+      if [[ "${asset,,}" == *.manifest ]]; then
+        head -c 12000 "$asset" 2>/dev/null || true
+        echo
+      else
+        strings -a "$asset" 2>/dev/null |
+          grep -iE 'CSettingsScreen|ShowSettingsScreen|CWindow_PlayButton|MainSplash|EScreen_FE_|\.xml|\.atlas|\.png|\.dds|settings|button|menu' |
+          head -n 100 || true
+      fi
+    done
+  echo
+  echo "=== Native UI identifier offsets (file offsets, text only) ==="
+  for lib in "$DECODE/lib/arm64-v8a/libABBS.so" "$DECODE/lib/armeabi-v7a/libABBS.so"; do
+    if [[ -f "$lib" ]]; then
+      echo "-- ${lib#"$DECODE/"} --"
+      strings -a -t x "$lib" |
+        grep -iE 'CSettingsScreen|ShowSettingsScreen|CWindow_PlayButton|CWindow_MainSplashScreen|DeveloperMenuScreen|EScreen_FE_|UIPAK:|XMLPAK:' |
+        head -n 180 || true
+      if command -v readelf >/dev/null 2>&1; then
+        readelf -Ws "$lib" 2>/dev/null |
+          grep -iE 'settings|frontend|screen|window|menu|button|pak|resource' |
+          head -n 100 || true
+      fi
+    fi
+  done
+  echo
   echo "=== Native game UI string hints (text only; no binaries uploaded) ==="
   for lib in "$DECODE/lib/arm64-v8a/libABBS.so" "$DECODE/lib/armeabi-v7a/libABBS.so"; do
     if [[ -f "$lib" ]] && command -v strings >/dev/null 2>&1; then
