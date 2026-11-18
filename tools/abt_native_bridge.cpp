@@ -35,11 +35,33 @@ static int current_graphics(uintptr_t base) {
     auto get = reinterpret_cast<GetCurrent>(base + 0x6ed610);
     return get();
 }
-static int change_graphics(uintptr_t base, int direction) {
-    if (direction != -1 && direction != 1) return -1;
-    using ChangePerformance = int (*)(int);
-    auto change = reinterpret_cast<ChangePerformance>(base + 0x6ed4b8);
-    return change(direction);
+static int set_graphics(uintptr_t base, int target) {
+    if (target < 0 || target > 3) return -1;
+    using LoadProfile = int (*)(int);
+    auto load = reinterpret_cast<LoadProfile>(base + 0x6ed26c);
+    if (!load(target)) return -2;
+    // Mirror the renderer notifications performed by CDeviceConfig::ChangePerformance
+    // immediately after LoadDeviceConfigByPerformance succeeds.
+    const uintptr_t manager_slot = base + 0xd114a0;
+    const uintptr_t manager = *reinterpret_cast<volatile uintptr_t *>(manager_slot);
+    if (manager) {
+        const uintptr_t scene_manager = *reinterpret_cast<volatile uintptr_t *>(manager + 0x78);
+        if (scene_manager) {
+            const uintptr_t render_config = *reinterpret_cast<volatile uintptr_t *>(scene_manager + 0x130);
+            if (render_config) {
+                using NotifyProfile = void (*)(void *, int);
+                auto notify = reinterpret_cast<NotifyProfile>(base + 0x472700);
+                notify(reinterpret_cast<void *>(render_config), target);
+            }
+            const uintptr_t scene = *reinterpret_cast<volatile uintptr_t *>(scene_manager + 0x40);
+            if (scene) {
+                using NotifyScene = void (*)(void *, int);
+                auto notify = reinterpret_cast<NotifyScene>(base + 0x48ad90);
+                notify(reinterpret_cast<void *>(scene), 0);
+            }
+        }
+    }
+    return current_graphics(base) == target ? target + 1 : -3;
 }
 }
 
@@ -73,11 +95,8 @@ extern "C" JNIEXPORT jint JNICALL
 Java_com_rovio_angrybirdstransformers_RevivalNative_changeGraphics(JNIEnv *, jclass, jint direction) {
     const uintptr_t base = abbs_base();
     if (!base) return -2;
-    const int before = current_graphics(base);
-    const int result = change_graphics(base, direction);
-    if (result <= 0) return result;
-    const int after = current_graphics(base);
-    return after == before ? 0 : after + 1; // 1..4 means changed to profile index 0..3
+    const int current = current_graphics(base);
+    return set_graphics(base, current + direction);
 }
 
 extern "C" JNIEXPORT jint JNICALL
@@ -90,7 +109,7 @@ Java_com_rovio_angrybirdstransformers_RevivalNative_setGraphicsLevel(JNIEnv *, j
     for (int attempt = 0; attempt < 5 && current != target; ++attempt) {
         const int before = current;
         const int direction = target > current ? 1 : -1;
-        if (change_graphics(base, direction) <= 0) return -4;
+        if (set_graphics(base, current + direction) <= 0) return -4;
         current = current_graphics(base);
         if (current == before) return -5;
     }
