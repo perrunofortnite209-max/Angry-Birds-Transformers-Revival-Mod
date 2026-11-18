@@ -1,0 +1,73 @@
+name: Build isolated PAK diagnostic APKs
+
+on:
+  push:
+    branches: [feature/full-revival-mod]
+    paths:
+      - ".github/workflows/build-isolated-pak-tests.yml"
+      - "tools/build_pak_only_diagnostic.py"
+      - "tools/build_visual_test_apk.py"
+      - "tools/xgs_kpx_v2.py"
+      - "tools/xox2_codec.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-pak-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-revival-mod
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          accept-android-sdk-licenses: true
+      - name: Install Android build tools
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'build-tools;35.0.0'
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+          python -m pip install --upgrade pip pillow
+      - name: Download and verify original APK
+        run: |
+          set -euo pipefail
+          mkdir -p input output
+          curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/com.rovio.angrybirdstransformers-24200.apk" -o input/original.apk
+          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  input/original.apk" | sha256sum -c -
+      - name: Build settings-only and features-only APKs
+        run: |
+          set -euo pipefail
+          python tools/build_pak_only_diagnostic.py --apk input/original.apk --out output/ABT-SETTINGS-ONLY-unsigned.apk --repo . --only settings
+          python tools/build_pak_only_diagnostic.py --apk input/original.apk --out output/ABT-FEATURES-ONLY-unsigned.apk --repo . --only features
+      - name: Sign and verify both test APKs
+        run: |
+          set -euo pipefail
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/abt-isolated-pak.jks" -storepass "temporary-test-password" -keypass "temporary-test-password" -alias abt-isolated-pak -dname "CN=ABT Isolated PAK Diagnostic,O=Community Mod,C=CL" -keyalg RSA -keysize 2048 -validity 10000
+          for mode in SETTINGS FEATURES; do
+            zipalign -f -p 4 "output/ABT-$mode-ONLY-unsigned.apk" "output/ABT-$mode-ONLY-aligned.apk"
+            apksigner sign --ks "$RUNNER_TEMP/abt-isolated-pak.jks" --ks-key-alias abt-isolated-pak --ks-pass pass:temporary-test-password --key-pass pass:temporary-test-password --out "output/ABT-$mode-ONLY.apk" "output/ABT-$mode-ONLY-aligned.apk"
+            apksigner verify --verbose "output/ABT-$mode-ONLY.apk"
+            zipalign -c -v 4 "output/ABT-$mode-ONLY.apk"
+          done
+      - name: Upload isolated diagnostic APKs and reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: abt-isolated-pak-diagnostics
+          path: |
+            output/ABT-SETTINGS-ONLY.apk
+            output/ABT-SETTINGS-ONLY-unsigned.report.json
+            output/ABT-FEATURES-ONLY.apk
+            output/ABT-FEATURES-ONLY-unsigned.report.json
+          if-no-files-found: error
+          retention-days: 14
