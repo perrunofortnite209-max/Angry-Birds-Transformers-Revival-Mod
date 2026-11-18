@@ -62,9 +62,14 @@ static int set_graphics(uintptr_t base, int target) {
     for (int step = 0; step < 3 && current != target; ++step) {
         const int direction = target > current ? 1 : -1;
         const int changed = change(direction);
-        if (changed != 1) return -5;
         const int updated = current_graphics(base);
-        if (updated != current + direction) return -6;
+        // The engine's return value is not a reliable success flag on every
+        // profile. Trust the authoritative current-profile getter instead.
+        if (updated != current + direction) {
+            // Preserve both the native return value and observed profile in
+            // a negative diagnostic code for the settings UI.
+            return -100 - (changed * 10) - (updated < 0 ? 9 : updated);
+        }
         current = updated;
     }
 
@@ -184,9 +189,14 @@ static int set_graphics(uintptr_t base, int target) {
     for (int step = 0; step < 3 && current != target; ++step) {
         const int direction = target > current ? 1 : -1;
         const int changed = change(direction);
-        if (changed != 1) return -5;
         const int updated = current_graphics(base);
-        if (updated != current + direction) return -6;
+        // The engine's return value is not a reliable success flag on every
+        // profile. Trust the authoritative current-profile getter instead.
+        if (updated != current + direction) {
+            // Preserve both the native return value and observed profile in
+            // a negative diagnostic code for the settings UI.
+            return -100 - (changed * 10) - (updated < 0 ? 9 : updated);
+        }
         current = updated;
     }
     return current == target ? target + 1 : -7;
