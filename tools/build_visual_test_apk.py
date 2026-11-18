@@ -198,10 +198,15 @@ def patch_welcome(decoded, report):
     if-nez v0, :ball_done
     new-instance v5, Landroid/widget/TextView;
     invoke-direct {v5, p0}, Landroid/widget/TextView;-><init>(Landroid/content/Context;)V
-    const-string v0, "MOD"
+    const-string v0, "M"
     invoke-virtual {v5, v0}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
-    const/high16 v0, 0x41300000
+    const/high16 v0, 0x41a00000
     invoke-virtual {v5, v0}, Landroid/widget/TextView;->setTextSize(F)V
+    const-string v0, "sans-serif"
+    const/4 v1, 0x1
+    invoke-static {v0, v1}, Landroid/graphics/Typeface;->create(Ljava/lang/String;I)Landroid/graphics/Typeface;
+    move-result-object v0
+    invoke-virtual {v5, v0}, Landroid/widget/TextView;->setTypeface(Landroid/graphics/Typeface;)V
     const/16 v0, 0x11
     invoke-virtual {v5, v0}, Landroid/widget/TextView;->setGravity(I)V
     const/4 v0, -0x1
@@ -212,27 +217,27 @@ def patch_welcome(decoded, report):
     invoke-virtual {v0, v1}, Landroid/graphics/drawable/GradientDrawable;->setShape(I)V
     const/4 v1, 0x2
     new-array v1, v1, [I
-    const v2, -0xe87511
+    const v2, -0xf4e8d8
     const/4 v3, 0x0
     aput v2, v1, v3
-    const v2, -0xff6a20
+    const v2, -0xe89432
     const/4 v3, 0x1
     aput v2, v1, v3
     invoke-virtual {v0, v1}, Landroid/graphics/drawable/GradientDrawable;->setColors([I)V
-    const/4 v1, 0x1
-    const v2, -0x1
+    const/4 v1, 0x2
+    const v2, -0xba2601
     invoke-virtual {v0, v1, v2}, Landroid/graphics/drawable/GradientDrawable;->setStroke(II)V
     invoke-virtual {v5, v0}, Landroid/view/View;->setBackground(Landroid/graphics/drawable/Drawable;)V
     const/high16 v0, 0x41000000
     invoke-virtual {v5, v0}, Landroid/view/View;->setElevation(F)V
-    const/high16 v0, 0x40800000
+    const/high16 v0, 0x41000000
     const/4 v1, 0x0
-    const/high16 v2, 0x40000000
-    const/high16 v3, -0x1000000
+    const/4 v2, 0x0
+    const v3, -0xba2601
     invoke-virtual {v5, v0, v1, v2, v3}, Landroid/widget/TextView;->setShadowLayer(FFFI)V
-    const/4 v0, 0x8
+    const/16 v0, 0x8
     const/4 v1, 0x6
-    const/4 v2, 0x8
+    const/16 v2, 0x8
     const/4 v3, 0x6
     invoke-virtual {v5, v0, v1, v2, v3}, Landroid/widget/TextView;->setPadding(IIII)V
     invoke-virtual {p0}, Landroid/content/Context;->getResources()Landroid/content/res/Resources;
@@ -240,7 +245,7 @@ def patch_welcome(decoded, report):
     invoke-virtual {v6}, Landroid/content/res/Resources;->getDisplayMetrics()Landroid/util/DisplayMetrics;
     move-result-object v6
     iget v6, v6, Landroid/util/DisplayMetrics;->density:F
-    const/high16 v7, 0x42600000
+    const/high16 v7, 0x42800000
     mul-float v7, v7, v6
     float-to-int v7, v7
     new-instance v0, Landroid/widget/FrameLayout$LayoutParams;
