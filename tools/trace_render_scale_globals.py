@@ -117,17 +117,6 @@ for i, ins in enumerate(insns):
         if nxt.mnemonic in ("bl", "blr", "b", "ret"):
             break
     lines.append(f"ADRP {ins.address:#x} page={page:#x} reg={reg}: " + " | ".join(seq))
-# Dump full debug XML parser and config loading routines when symbols are available.
-lines += ["", "## Full configuration parser and device-config loader"]
-for start, end, name in symbols:
-    if ("SetDebugTweakablesFromXML" in name or "LoadDeviceSpecific" in name or
-            "LoadDeviceConfigFile" in name or "LoadDeviceConfigByPerformance" in name):
-        if end - start > 0x5000:
-            end = start + 0x5000
-        lines.append(f"\\n### {name} [{start:#x}-{end:#x}]")
-        for ins in md.disasm(code[start-base:end-base], start):
-            lines.append(f"{ins.address:08x}: {ins.mnemonic:<8} {ins.op_str}")
-
 # Resolve which ELF section contains each relocation place and the target global.
 lines += ["", "## Relocation slot section mapping"]
 for slot, desc in sorted(relocation_slots.items()):
