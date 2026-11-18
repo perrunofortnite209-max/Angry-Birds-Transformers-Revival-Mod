@@ -1,0 +1,57 @@
+name: Analyze Android integration points
+
+on:
+  push:
+    branches: [feature/full-revival-mod]
+    paths:
+      - ".github/workflows/analyze-android-integration.yml"
+      - "tools/analyze_android_integration.sh"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag containing the user's original APK"
+        required: true
+        default: "game"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout development branch
+        uses: actions/checkout@v4
+
+      - name: Install Android inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apktool unzip aapt default-jdk
+
+      - name: Download exact original APK privately
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || 'game' }}
+        run: |
+          set -euo pipefail
+          mkdir -p private-input reports
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "*.apk" --dir private-input
+          mapfile -t APKS < <(find private-input -maxdepth 1 -type f -name '*.apk')
+          test "${#APKS[@]}" -eq 1
+          echo "APK_FILE=${APKS[0]}" >> "$GITHUB_ENV"
+          sha256sum "${APKS[0]}" | tee reports/apk-hash.txt
+
+      - name: Inspect manifest, entry points and dex signatures
+        run: |
+          set -euo pipefail
+          bash tools/analyze_android_integration.sh "$APK_FILE" reports
+          cat reports/android-integration-report.txt
+
+      - name: Upload text-only diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: abt-android-integration-diagnostics
+          path: reports/*
+          if-no-files-found: error
+          retention-days: 7
