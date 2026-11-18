@@ -167,7 +167,7 @@ def patch_welcome(decoded, report):
 '''
     floating_helper=r"""
 .method private showRevivalFloatingBallIfReady()V
-    .locals 6
+    .locals 8
     const-string v0, "abt_revival_mod"
     const/4 v1, 0x0
     invoke-virtual {p0, v0, v1}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
@@ -202,7 +202,7 @@ def patch_welcome(decoded, report):
     invoke-virtual {v5, v0}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
     const/high16 v0, 0x41300000
     invoke-virtual {v5, v0}, Landroid/widget/TextView;->setTextSize(F)V
-    const/4 v0, 0x1
+    const/16 v0, 0x11
     invoke-virtual {v5, v0}, Landroid/widget/TextView;->setGravity(I)V
     const/4 v0, -0x1
     invoke-virtual {v5, v0}, Landroid/widget/TextView;->setTextColor(I)V
@@ -210,18 +210,26 @@ def patch_welcome(decoded, report):
     invoke-direct {v0}, Landroid/graphics/drawable/GradientDrawable;-><init>()V
     const/4 v1, 0x1
     invoke-virtual {v0, v1}, Landroid/graphics/drawable/GradientDrawable;->setShape(I)V
-    const v1, -0xff5500
+    const v1, -0xe98801
     invoke-virtual {v0, v1}, Landroid/graphics/drawable/GradientDrawable;->setColor(I)V
     invoke-virtual {v5, v0}, Landroid/view/View;->setBackground(Landroid/graphics/drawable/Drawable;)V
     const/high16 v0, 0x41000000
     invoke-virtual {v5, v0}, Landroid/view/View;->setElevation(F)V
+    invoke-virtual {p0}, Landroid/content/Context;->getResources()Landroid/content/res/Resources;
+    move-result-object v6
+    invoke-virtual {v6}, Landroid/content/res/Resources;->getDisplayMetrics()Landroid/util/DisplayMetrics;
+    move-result-object v6
+    iget v6, v6, Landroid/util/DisplayMetrics;->density:F
+    const/high16 v7, 0x42600000
+    mul-float v7, v7, v6
+    float-to-int v7, v7
     new-instance v0, Landroid/widget/FrameLayout$LayoutParams;
-    const/16 v1, 0x38
-    const/16 v2, 0x38
     const/16 v3, 0x15
-    invoke-direct {v0, v1, v2, v3}, Landroid/widget/FrameLayout$LayoutParams;-><init>(III)V
-    const/16 v1, 0x10
-    iput v1, v0, Landroid/widget/FrameLayout$LayoutParams;->rightMargin:I
+    invoke-direct {v0, v7, v7, v3}, Landroid/widget/FrameLayout$LayoutParams;-><init>(III)V
+    const/high16 v7, 0x41400000
+    mul-float v7, v7, v6
+    float-to-int v7, v7
+    iput v7, v0, Landroid/widget/FrameLayout$LayoutParams;->rightMargin:I
     new-instance v1, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallClickListener;
     invoke-direct {v1, p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallClickListener;-><init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;)V
     invoke-virtual {v5, v1}, Landroid/view/View;->setOnClickListener(Landroid/view/View$OnClickListener;)V
