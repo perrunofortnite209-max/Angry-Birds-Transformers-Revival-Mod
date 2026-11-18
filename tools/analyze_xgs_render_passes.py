@@ -34,6 +34,7 @@ TARGETS = [
     ("XGSOGL_viewport", re.compile(r"_Z15XGSOGL_viewportiiii$")),
     ("CXGSRenderTargetOGL::Activate", re.compile(r"_ZN19CXGSRenderTargetOGL8ActivateEv$")),
     ("CXGSDisplayOGL::PresentScene", re.compile(r"_ZN14CXGSDisplayOGL12PresentSceneEi$")),
+    ("CApp::ResetViewport", re.compile(r"_ZN4CApp13ResetViewportEv$")),
     ("CParticleEffectManager::PrepareFrame", re.compile(r"_ZN22CParticleEffectManager12PrepareFrameEv$")),
     ("CEnvObject::PrepareFrame", re.compile(r"_ZN11CEnvObject12PrepareFrameEv$")),
     ("C2DBatchControllerByMaterial::OnEndFrame", re.compile(r"_ZN28C2DBatchControllerByMaterial10OnEndFrameEv$")),
@@ -81,6 +82,10 @@ for ins in md.disasm(text, base):
             owner_addr = max((a for a in symbols if a <= ins.address), default=None)
             owner = symbols.get(owner_addr, ("<unknown>", 0))[0]
             xrefs[dest].append((ins.address, owner))
+out.append("## CRenderManager symbol inventory")
+for address, (name, size) in sorted(symbols.items()):
+    if "CRenderManager" in name:
+        out.append(f"- {address:#x} size={size:#x} {name}")
 out.append("## Resolution helper direct caller cross-references")
 for address, label in xref_targets.items():
     out.append(f"- {label} @ {address:#x}: {len(xrefs[address])} callers")
