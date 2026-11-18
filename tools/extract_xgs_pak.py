@@ -67,21 +67,25 @@ def parse_pak(blob, label, out_dir):
         if offset > len(blob) or packed > len(blob) - offset:
             raise ValueError(f"{label}: payload bounds invalid for entry {i} ({name})")
         raw = blob[offset:offset + packed]
-        if compressed:
-            if compression == 1:
-                data = zlib.decompress(raw)
-            elif compression == 2:
-                try:
-                    import lz4.block
-                except ImportError as exc:
-                    raise RuntimeError("LZ4 entries require the Python package 'lz4'") from exc
-                data = lz4.block.decompress(raw, uncompressed_size=unpacked)
+        try:
+            if compressed:
+                if compression == 1:
+                    data = zlib.decompress(raw)
+                elif compression == 2:
+                    try:
+                        import lz4.block
+                    except ImportError as exc:
+                        raise RuntimeError("LZ4 entries require the Python package 'lz4'") from exc
+                    data = lz4.block.decompress(raw, uncompressed_size=unpacked)
+                else:
+                    raise ValueError("compressed entry but archive compression is raw")
             else:
-                raise ValueError(f"{label}: compressed entry but archive compression is raw")
-        else:
-            data = raw
-        if len(data) != unpacked:
-            raise ValueError(f"{label}: size mismatch for {name}: got {len(data)}, expected {unpacked}")
+                data = raw
+            if len(data) != unpacked:
+                raise ValueError(f"decompressed size {len(data)} != expected {unpacked}")
+        except Exception as exc:
+            lines.append(f"  [{i:03d}] SKIPPED {name} | packed={packed} unpacked={unpacked} reason={exc}")
+            continue
         safe = PurePosixPath(name)
         if safe.is_absolute() or ".." in safe.parts:
             raise ValueError(f"{label}: unsafe entry path {name!r}")
