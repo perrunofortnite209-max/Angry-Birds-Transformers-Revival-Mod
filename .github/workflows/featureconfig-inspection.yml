@@ -81,3 +81,5 @@ jobs:
           name: featureconfig-inspection
           path: ${{ runner.temp }}/out/
           retention-days: 7
+
+# Run the feature configuration inspection.
