@@ -1,37 +1,34 @@
 #!/usr/bin/env python3
-"""Read-only XGS performance-path inventory for the original APK's ARM64 library."""
+"""Compact, read-only XGS ARM64 symbol and hot-path candidate inventory."""
 from __future__ import annotations
 import argparse, re
+from collections import Counter
 from pathlib import Path
 from elftools.elf.elffile import ELFFile
 from capstone import Cs, CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN
 
-PATTERNS = re.compile(
-    r"render|present|swap|frame|fps|sleep|wait|sync|vsync|"
-    r"texture|upload|buffer|shader|draw|batch|memory|alloc|free|"
-    r"update|tick|scene|particle|effect|animation|stream|compress|"
-    r"load|unload|gc|garbage|deviceconfig|xgs",
-    re.I,
-)
-PRIORITY = re.compile(
-    r"DoPresent|Render|Present|Swap|Draw|Update|Tick|"
-    r"LimitFPS|GetDesiredFramerate|FrameRate|Texture|"
-    r"Alloc|Free|Memory|Stream|DeviceConfig|XGS",
-    re.I,
-)
+CATEGORIES = {
+    "frame_pacing": re.compile(r"present|swap|frame|fps|sleep|wait|sync|vsync|framerate", re.I),
+    "rendering": re.compile(r"render|draw|batch|shader", re.I),
+    "texture_upload": re.compile(r"texture|upload|buffer", re.I),
+    "memory": re.compile(r"memory|alloc|free|heap|pool", re.I),
+    "update_scene": re.compile(r"update|tick|scene|particle|effect|animation", re.I),
+    "streaming": re.compile(r"stream|compress|load|unload|gc|garbage", re.I),
+    "engine": re.compile(r"deviceconfig|xgs", re.I),
+}
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("elf", type=Path)
     ap.add_argument("output", type=Path)
     args = ap.parse_args()
-    lines = []
+    lines = [
+        "XGS STATIC SYMBOL TRIAGE — no runtime timings or FPS measurements",
+        "Interpret symbol names as leads only; confirm callers and runtime behavior before patching.",
+    ]
     with args.elf.open("rb") as f:
         elf = ELFFile(f)
-        lines += [
-            "READ-ONLY STATIC INVENTORY — not a runtime performance measurement",
-            f"ELF class={elf.elfclass} machine={elf.header['e_machine']} endian={elf.little_endian}",
-        ]
+        lines.append(f"ELF class={elf.elfclass} machine={elf.header['e_machine']} endian={elf.little_endian}")
         symbols = {}
         for sec in elf.iter_sections():
             if sec.header.sh_type not in ("SHT_SYMTAB", "SHT_DYNSYM"):
@@ -40,30 +37,44 @@ def main():
                 name = sym.name
                 size = int(sym.entry.st_size)
                 addr = int(sym.entry.st_value)
-                if name and size and PATTERNS.search(name):
-                    symbols[(addr, name)] = (size, name)
-        lines.append(f"Matched named functions: {len(symbols)}")
-        for (addr, name), (size, _) in sorted(symbols.items()):
-            if PRIORITY.search(name):
-                lines.append(f"FUNCTION 0x{addr:x} size=0x{size:x} {name}")
+                if name and size:
+                    cats = [key for key, rx in CATEGORIES.items() if rx.search(name)]
+                    if cats:
+                        symbols[(addr, name)] = (size, cats)
+        counts = Counter(cat for _, cats in symbols.values() for cat in cats)
+        lines.append(f"Total unique named functions matching categories: {len(symbols)}")
+        lines.append("Category counts (a function may count in multiple categories):")
+        for cat, count in counts.most_common():
+            lines.append(f"  {cat}: {count}")
+        ranked = sorted(
+            [(addr, name, size, cats) for (addr, name), (size, cats) in symbols.items()],
+            key=lambda x: (0 if "frame_pacing" in x[3] else 1 if "rendering" in x[3] else 2,
+                           -x[2], x[1])
+        )
+        lines.append("\nNAMED FUNCTION CANDIDATES (first 220; address, size, category):")
+        for addr, name, size, cats in ranked[:220]:
+            lines.append(f"0x{addr:x} size=0x{size:x} [{','.join(cats)}] {name}")
         textsec = elf.get_section_by_name(".text")
         if textsec:
             md = Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN)
             text = textsec.data()
             base = int(textsec.header.sh_addr)
-            selected = [(a, s, n) for (a, n), (s, _) in symbols.items()
-                        if PRIORITY.search(n) and base <= a < base + len(text)]
-            for addr, size, name in sorted(selected):
+            # Disassemble a bounded sample of the largest frame/render candidates only.
+            selected = [
+                item for item in ranked
+                if ("frame_pacing" in item[3] or "rendering" in item[3])
+                and base <= item[0] < base + len(text)
+            ][:24]
+            lines.append("\nBOUNDED DISASSEMBLY SAMPLE (up to 24 functions, 0x180 bytes each):")
+            for addr, name, size, cats in selected:
+                lines.append(f"\nFUNCTION {name} @0x{addr:x} size=0x{size:x} categories={','.join(cats)}")
                 off = addr - base
-                chunk = text[off:off + min(size, 0x500)]
-                lines.append(f"\nDISASSEMBLY {name} @0x{addr:x} size=0x{size:x}")
-                for ins in md.disasm(chunk, addr):
+                for ins in md.disasm(text[off:off + min(size, 0x180)], addr):
                     lines.append(f"  {ins.address:08x}: {ins.mnemonic:8} {ins.op_str}")
         else:
             lines.append("WARNING: .text section not found")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"Wrote {len(lines)} lines to {args.output}")
-
+    print(f"Wrote {len(lines)} lines; {len(symbols)} unique matching symbols")
 if __name__ == "__main__":
     main()
