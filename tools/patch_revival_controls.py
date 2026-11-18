@@ -28,16 +28,33 @@ def patch(decoded: Path, report: dict):
     old_method=old.group(0).replace("showRevivalSettings()V","showRevivalBallOptions()V",1)
     source=source[:old.start()]+old_method+source[old.end():]
     # Queue the selected graphics profile before native startup continues.
-    oncreate_pattern=re.compile(r"(?ms)^\\.method[^\\n]*\\bonCreate\\(Landroid/os/Bundle;\\)V\\b.*?^\\.end method")
+    oncreate_pattern=re.compile(r"(?ms)^\.method[^\n]*\bonCreate\(Landroid/os/Bundle;\)V\b.*?^\.end method")
     oncreate=oncreate_pattern.search(source)
     if not oncreate: raise RuntimeError("onCreate(Bundle) not found for deferred graphics profile")
     oncreate_body=oncreate.group(0)
     if "prepareSavedRevivalGraphics()V" not in oncreate_body:
-        super_call=re.search(r"(?m)^\\s*invoke-super(?:/range)?\\s+\\{[^}]+\\}, [^\\n]*->onCreate\\(Landroid/os/Bundle;\\)V\\s*$",oncreate_body)
+        super_call=re.search(r"(?m)^\s*invoke-super(?:/range)?\s+\{[^}]+\}, [^\n]*->onCreate\(Landroid/os/Bundle;\)V\s*$",oncreate_body)
         if not super_call: raise RuntimeError("Could not locate Activity super.onCreate call for graphics startup hook")
-        insertion="\\n    invoke-direct {p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->prepareSavedRevivalGraphics()V"
+        insertion="\n    invoke-direct {p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->prepareSavedRevivalGraphics()V"
         oncreate_body=oncreate_body[:super_call.end()]+insertion+oncreate_body[super_call.end():]
         source=source[:oncreate.start()]+oncreate_body+source[oncreate.end():]
+    prepare=r"""
+.method private prepareSavedRevivalGraphics()V
+    .locals 4
+    const-string v0, "abt_revival_mod"
+    const/4 v1, 0x0
+    invoke-virtual {p0, v0, v1}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
+    move-result-object v0
+    const-string v1, "graphics_profile"
+    const/4 v2, -0x1
+    invoke-interface {v0, v1, v2}, Landroid/content/SharedPreferences;->getInt(Ljava/lang/String;I)I
+    move-result v2
+    if-ltz v2, :prepare_graphics_done
+    invoke-static {v2}, Lcom/rovio/angrybirdstransformers/RevivalNative;->setPendingGraphicsLevel(I)I
+    :prepare_graphics_done
+    return-void
+.end method
+"""
     # Main menu.
     main=r"""
 .method public showRevivalSettings()V
