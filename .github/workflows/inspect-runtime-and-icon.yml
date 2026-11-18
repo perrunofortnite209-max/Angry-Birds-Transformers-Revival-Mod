@@ -70,9 +70,9 @@ jobs:
           candidates=[]
           for p in files:
               source=p.read_text(errors="ignore")
-              m=re.search(r"(?m)^\\.class\\s+[^\\n]*?L([^;]+);",source)
-              if m and m.group(1)==launcher_classes[0]:
-                  candidates.append((p,source,m.group(1),True))
+              class_lines=[line for line in source.splitlines() if line.startswith(".class ") and ("L"+launcher_classes[0]+";") in line]
+              if len(class_lines)==1:
+                  candidates.append((p,source,launcher_classes[0],True))
           if len(candidates)!=1:
               raise SystemExit(f"Could not resolve launcher Activity smali: {launcher_names}; matches={len(candidates)}")
           p,s,cls,is_manifest=candidates[0]
