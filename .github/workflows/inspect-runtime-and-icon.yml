@@ -1,0 +1,78 @@
+name: Inspect ABT runtime hooks and launcher icon
+on:
+  push:
+    branches: [feature/full-revival-mod]
+    paths:
+      - ".github/workflows/inspect-runtime-and-icon.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-revival-mod
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install APK tooling
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends curl
+          curl -fL --retry 3 https://github.com/iBotPeaches/Apktool/releases/download/v2.11.1/apktool_2.11.1.jar -o "$RUNNER_TEMP/apktool.jar"
+          printf '#!/usr/bin/env bash\nexec java -jar "$RUNNER_TEMP/apktool.jar" "$@"\n' | sudo tee /usr/local/bin/apktool >/dev/null
+          sudo chmod +x /usr/local/bin/apktool
+      - name: Download exact APK and user icon
+        run: |
+          set -euo pipefail
+          mkdir -p input output
+          curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/com.rovio.angrybirdstransformers-24200.apk" -o input/original.apk
+          curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/f3313d17-ccf7-4c82-8007-c68b4233b65d.png" -o input/user-icon.png
+          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  input/original.apk" | sha256sum -c -
+      - name: Decode and inspect Activity and icon resources
+        run: |
+          set -euo pipefail
+          apktool d -f input/original.apk -o decoded
+          python - <<'PY'
+          from pathlib import Path
+          import json, re
+          root=Path("decoded")
+          target="Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;"
+          hits=[]
+          for p in root.glob("smali*/**/*.smali"):
+              s=p.read_text(errors="ignore")
+              if re.search(r"^\\.class\\b.*"+re.escape(target),s,re.M):
+                  hits.append((p,s))
+          if len(hits)!=1: raise SystemExit(f"Expected exactly one main Activity, found {len(hits)}")
+          p,s=hits[0]
+          Path("output/main_activity.smali").write_text(s)
+          manifest=(root/"AndroidManifest.xml").read_text(errors="ignore")
+          (Path("output/manifest.xml")).write_text(manifest)
+          icon_files=[]
+          for q in (root/"res").rglob("*"):
+              if q.is_file() and ("ic_launcher" in q.name.lower() or "icon" in q.name.lower()):
+                  icon_files.append(str(q.relative_to(root)))
+          report={"activity_path":str(p.relative_to(root)),
+                  "activity_methods":re.findall(r"(?m)^\\.method[^\\n]*",s),
+                  "icon_resource_files":icon_files,
+                  "manifest_icon_lines":[x.strip() for x in manifest.splitlines() if "icon" in x.lower()],
+                  "smali_files":len(list(root.glob("smali*/**/*.smali")))}
+          Path("output/inspection.json").write_text(json.dumps(report,indent=2)+"\\n")
+          print(json.dumps(report,indent=2))
+          PY
+      - name: Upload inspection bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: abt-runtime-icon-inspection
+          path: |
+            output/main_activity.smali
+            output/manifest.xml
+            output/inspection.json
+            input/user-icon.png
+          if-no-files-found: error
+          retention-days: 7
