@@ -96,6 +96,34 @@ for i, ins in enumerate(insns):
                 if 0x117e00 <= ea <= 0x117ec0:
                     lines.append(f"ADRP {ins.address:#x} -> {ea:#x} via {reg}; " + " | ".join(seq))
                     break
+
+# Also list every instruction that addresses the GOT/data pages holding the
+# relocation slots. The earlier narrow scan only matched a single ADRP+memory
+# pair and could miss compiler-generated address materialization sequences.
+lines += ["", "## Broad code references to relocation/GOT pages"]
+interesting_pages = {0xcee000, 0xcef000, 0xd41000, 0xd418000, 0x117000}
+for i, ins in enumerate(insns):
+    if ins.mnemonic != "adrp" or len(ins.operands) < 2:
+        continue
+    if ins.operands[0].type != CS_OP_REG or ins.operands[1].type != CS_OP_IMM:
+        continue
+    reg = ins.reg_name(ins.operands[0].reg)
+    page = int(ins.operands[1].imm)
+    if page not in interesting_pages:
+        continue
+    seq = []
+    for nxt in insns[i+1:i+16]:
+        seq.append(f"{nxt.address:#x}: {nxt.mnemonic} {nxt.op_str}")
+        if nxt.mnemonic in ("bl", "blr", "b", "ret"):
+            break
+    lines.append(f"ADRP {ins.address:#x} page={page:#x} reg={reg}: " + " | ".join(seq))
+# Resolve which ELF section contains each relocation place and the target global.
+lines += ["", "## Relocation slot section mapping"]
+for slot, desc in sorted(relocation_slots.items()):
+    owner = next((s for s in elf.iter_sections()
+                  if int(s['sh_addr']) <= slot < int(s['sh_addr']) + int(s['sh_size'])), None)
+    lines.append(f"{slot:#x}: section={owner.name if owner else '<unmapped>'} {desc}")
+
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text("\n".join(lines) + "\n", encoding="utf-8")
 print(f"Wrote {out}")
