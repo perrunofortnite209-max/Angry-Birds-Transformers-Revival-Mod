@@ -3,8 +3,9 @@
 All PAKs, manifest, resources and unrelated APK entries remain byte-identical.
 """
 from __future__ import annotations
-import argparse, hashlib, importlib.util, io, json, re, subprocess, sys, tempfile, zipfile
+import argparse, hashlib, importlib.util, io, json, os, re, subprocess, sys, tempfile, zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 EXPECTED = "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013"
 TARGETS = {
@@ -76,14 +77,28 @@ def main():
  a=ap.parse_args(); a.out.parent.mkdir(parents=True,exist_ok=True)
  src=a.apk.read_bytes()
  if sha(src)!=EXPECTED: raise RuntimeError("El APK de entrada no coincide con el original 2.42.0 analizado")
- report={"method":"DEX transplant + guarded native FPS patch","target_fps":144,"pak_modified":False,"manifest_modified":False,"resources_modified":True,"icon_safe_scale":1.0,"icon_entries":[],"welcome_first_launch":True,"fps_patches":[]}
+ report={"method":"DEX transplant + guarded native FPS patch","target_fps":144,"pak_modified":False,"manifest_modified":True,"resources_modified":True,"icon_safe_scale":1.0,"icon_entries":[],"welcome_first_launch":True,"fps_patches":[]}
  welcome=load_patch(a.repo.resolve())
  with tempfile.TemporaryDirectory(prefix="abt-combined-") as td:
   td=Path(td); decoded=td/"decoded"; rebuilt=td/"rebuilt.apk"
   run(["apktool","d","-f",str(a.apk),"-o",str(decoded)])
   welcome(decoded,report)
+  manifest_path=decoded/"AndroidManifest.xml"
+  tree=ET.parse(manifest_path); root=tree.getroot()
+  android="{http://schemas.android.com/apk/res/android}"
+  app=root.find("application")
+  if app is None: raise RuntimeError("AndroidManifest.xml no contiene application")
+  old_code=int(app.get(android+"versionCode","24200"))
+  run_number=int(os.environ.get("GITHUB_RUN_NUMBER","1"))
+  run_attempt=int(os.environ.get("GITHUB_RUN_ATTEMPT","1"))
+  new_code=max(old_code+1,24200+run_number*100+run_attempt)
+  app.set(android+"versionCode",str(new_code))
+  tree.write(manifest_path,encoding="utf-8",xml_declaration=True)
+  report["version_code"]={"previous":old_code,"new":new_code,"update_in_place":True}
   run(["apktool","b","--use-aapt2",str(decoded),"-o",str(rebuilt)])
-  with zipfile.ZipFile(rebuilt) as z: dex={n:z.read(n) for n in z.namelist() if is_dex(n)}
+  with zipfile.ZipFile(rebuilt) as z:
+   dex={n:z.read(n) for n in z.namelist() if is_dex(n)}
+   manifest_payload=z.read("AndroidManifest.xml")
   with zipfile.ZipFile(a.apk) as original:
    olddex={n for n in original.namelist() if is_dex(n)}
    if olddex!=set(dex): raise RuntimeError(f"Conjunto DEX distinto: {olddex} vs {set(dex)}")
@@ -94,12 +109,12 @@ def main():
    if len(icon_names)!=7:
     candidates=[n for n in names if "app_icon" in n.lower() or ("drawable" in n.lower() and n.lower().endswith((".png",".webp")))]
     raise RuntimeError(f"Expected 7 launcher PNGs, found {len(icon_names)}: {icon_names}; nearby resource entries: {candidates[:80]}")
-   before={n:sha(original.read(n)) for n in names if not is_dex(n) and n not in TARGETS and not is_icon(n) and not is_sig(n)}
+   before={n:sha(original.read(n)) for n in names if n!="AndroidManifest.xml" and not is_dex(n) and n not in TARGETS and not is_icon(n) and not is_sig(n)}
    with zipfile.ZipFile(a.out,"w") as out:
     for info in original.infolist():
      n=info.filename
      if is_sig(n): continue
-     payload=dex[n] if is_dex(n) else replacements[n] if n in replacements else original.read(n)
+     payload=dex[n] if is_dex(n) else manifest_payload if n=="AndroidManifest.xml" else replacements[n] if n in replacements else original.read(n)
      if is_icon(n):
       from PIL import Image
       with Image.open(io.BytesIO(original.read(n))) as old_icon: w,h=old_icon.size
@@ -109,7 +124,7 @@ def main():
   with zipfile.ZipFile(a.out) as check:
    bad=check.testzip()
    if bad: raise RuntimeError(f"ZIP dañado: {bad}")
-   after={n:sha(check.read(n)) for n in check.namelist() if not is_dex(n) and n not in TARGETS and not is_icon(n) and not is_sig(n)}
+   after={n:sha(check.read(n)) for n in check.namelist() if n!="AndroidManifest.xml" and not is_dex(n) and n not in TARGETS and not is_icon(n) and not is_sig(n)}
    if before!=after: raise RuntimeError("Cambió una entrada ajena a DEX/libABBS")
    for p in TARGETS:
     for fn,sig,off,old,new in TARGETS[p]:
