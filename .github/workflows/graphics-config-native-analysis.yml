@@ -80,6 +80,29 @@ jobs:
           Path(report).write_text("\n".join(lines) + "\n", encoding="utf-8")
           print("\n".join(lines[:120]))
           PY
+      - name: Decode Android device profiles and base render config
+        run: |
+          python - "$RUNNER_TEMP/out/deviceconfigs-extracted" "$RUNNER_TEMP/out/deviceconfigs-decoded" "$RUNNER_TEMP/out/deviceconfigs-decoded-report.txt" <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, "tools")
+          import xox2_codec
+          source, target, report = map(Path, sys.argv[1:])
+          rows = []
+          target.mkdir(parents=True, exist_ok=True)
+          for path in sorted(source.rglob("*.xml")):
+              raw = path.read_bytes()
+              if raw.startswith(b"XOX2"):
+                  decoded = xox2_codec.decode(raw)
+                  out = target / path.relative_to(source)
+                  out.parent.mkdir(parents=True, exist_ok=True)
+                  out.write_text(decoded, encoding="utf-8")
+                  if any(key in path.name.lower() for key in ("base-config", "android-generic", "ios-high", "ios-medium", "ios-low")):
+                      rows.append(f"===== {path.relative_to(source)} =====")
+                      rows.append(decoded)
+          report.write_text("\n".join(rows) + "\n", encoding="utf-8")
+          print("\n".join(rows))
+          PY
       - name: Extract VFXLimitConfig.xml from xml.pak
         run: |
           python - "$APK" "$RUNNER_TEMP/out/xml-extracted" "$RUNNER_TEMP/out/vfx-limit-config-report.txt" <<'PY'
