@@ -9,22 +9,35 @@
       "replacementRequested": true,
       "sourceAsset": null,
       "status": "waiting-for-user-icon",
-      "targets": ["launcher icon", "adaptive icon", "legacy icon"]
+      "targets": [
+        "launcher icon",
+        "adaptive icon",
+        "legacy icon"
+      ]
     }
   },
   "welcome": {
     "enabled": true,
     "title": "Angry Birds Transformers Revival Mod",
-    "message": "Bienvenido a mi mod de Angry Birds Transformers con soporte para teléfonos modernos. Desbloqueo FPS hasta 144 Hz. ¡Disfrútalo!",
+    "message": "¡Bienvenido a Angry Birds Transformers: Revival Mod! Una versión renovada para dispositivos Android actuales, con controles de FPS y opciones de rendimiento. ¡Prepárate para volver a la batalla!",
     "status": "planned",
     "firstLaunchOnly": true,
     "dismissible": true
   },
   "frameRate": {
     "default": "system",
-    "choices": [30, 60, 90, 120, 144],
+    "choices": [
+      30,
+      60,
+      90,
+      120,
+      144
+    ],
     "availabilityPolicy": "only-offer-device-and-engine-validated-modes",
-    "fallbackFps": [60, 30],
+    "fallbackFps": [
+      60,
+      30
+    ],
     "status": "planned"
   },
   "graphics": {
@@ -40,7 +53,11 @@
     }
   },
   "display": {
-    "sync": ["system-default", "on", "off"],
+    "sync": [
+      "system-default",
+      "on",
+      "off"
+    ],
     "requestSupportedRefreshRate": true,
     "status": "research"
   },
