@@ -395,13 +395,13 @@ def patch_welcome(decoded, report):
  move-result v5
  const/high16 v6, 0x41400000
  cmpl-float v5, v5, v6
- if-gez :touch_check_vertical
+ if-ltz v5, :touch_check_vertical
  goto :touch_drag_start
  :touch_check_vertical
  invoke-static {v4}, Ljava/lang/Math;->abs(F)F
  move-result v5
  cmpl-float v5, v5, v6
- if-ltz :touch_consume_move
+ if-ltz v5, :touch_consume_move
  :touch_drag_start
  const/4 v1, 0x1
  iput-boolean v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->moved:Z
