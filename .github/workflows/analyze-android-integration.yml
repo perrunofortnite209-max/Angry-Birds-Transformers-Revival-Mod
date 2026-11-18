@@ -38,6 +38,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends apktool unzip aapt
 
+      - name: Install XGS archive decoder
+        run: |
+          python3 -m pip install --user --break-system-packages lz4
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - name: Download exact original APK privately
         env:
           GH_TOKEN: ${{ github.token }}
