@@ -38,42 +38,39 @@ static int current_graphics(uintptr_t base) {
 static int set_graphics(uintptr_t base, int target) {
     if (target < 0 || target > 3) return -1;
 
-    int current = current_graphics(base);
+    const int current = current_graphics(base);
     if (current < 0 || current > 4) return -2;
     if (current == target) return target + 1;
 
-    // Native ChangePerformance treats the special value 4 as an effective
-    // starting profile 1, but keeps the global value at 4 until a transition
-    // succeeds. Normalize it through the engine's own adjacent transitions:
-    // 4 -> 0/2/3, and 4 -> 1 via 2 -> 1.
-    using ChangePerformance = int (*)(int);
-    auto change = reinterpret_cast<ChangePerformance>(base + 0x6ed4b8);
-    if (current == 4) {
-        current = 1; // exact normalization performed by ChangePerformance
-        if (target == 1) {
-            const int up = change(1);
-            if (up != 1 || current_graphics(base) != 2) return -3;
-            const int down = change(-1);
-            if (down != 1 || current_graphics(base) != 1) return -4;
-            return 2; // 1-based success code for manual Medium
+    // ChangePerformance is intentionally directional and rejects several
+    // valid transitions (notably from the automatic profile 4). Use the
+    // engine's own absolute-profile loader instead. This is the same loader
+    // called by MainLoadingDeviceConfig and by ChangePerformance internally.
+    using LoadProfile = int (*)(int);
+    auto load = reinterpret_cast<LoadProfile>(base + 0x6ed26c);
+    if (load(target) != 1) return -8;
+
+    // Mirror ChangePerformance's post-load notifications so live renderer
+    // resources are refreshed after the device profile has been replaced.
+    auto app_global = reinterpret_cast<uintptr_t *>(base + 0xd114a0);
+    if (app_global && *app_global) {
+        auto app = *app_global;
+        auto device = *reinterpret_cast<uintptr_t *>(app + 0x78);
+        if (device) {
+            auto render_device = *reinterpret_cast<uintptr_t *>(device + 0x130);
+            if (render_device) {
+                using NotifyProfile = void (*)(uintptr_t, int);
+                reinterpret_cast<NotifyProfile>(base + 0x472700)(render_device, target);
+            }
+            auto renderer = *reinterpret_cast<uintptr_t *>(device + 0x40);
+            if (renderer) {
+                using RefreshRenderer = void (*)(uintptr_t, int);
+                reinterpret_cast<RefreshRenderer>(base + 0x48ad90)(renderer, 0);
+            }
         }
     }
 
-    for (int step = 0; step < 3 && current != target; ++step) {
-        const int direction = target > current ? 1 : -1;
-        const int changed = change(direction);
-        const int updated = current_graphics(base);
-        // The engine's return value is not a reliable success flag on every
-        // profile. Trust the authoritative current-profile getter instead.
-        if (updated != current + direction) {
-            // Preserve both the native return value and observed profile in
-            // a negative diagnostic code for the settings UI.
-            return -100 - (changed * 10) - (updated < 0 ? 9 : updated);
-        }
-        current = updated;
-    }
-
-    return current == target ? target + 1 : -7;
+    return current_graphics(base) == target ? target + 1 : -9;
 }
 
 } // namespace
