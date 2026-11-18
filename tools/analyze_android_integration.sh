@@ -35,7 +35,7 @@ REPORT="$OUT/android-integration-report.txt"
     sed "s#^$DECODE/##" | head -n 240 || true
   echo
   echo "=== Packed UI resource inventory and signatures (no payloads uploaded) ==="
-  find "$DECODE/assets" -type f \\( -iname '*.pak' -o -iname '*.manifest' \\) -print 2>/dev/null | sort |
+  find "$DECODE/assets" -type f \( -iname '*.pak' -o -iname '*.manifest' \) -print 2>/dev/null | sort |
     while IFS= read -r asset; do
       echo "-- ${asset#"$DECODE/"} --"
       stat -c 'size_bytes=%s' "$asset" || true
