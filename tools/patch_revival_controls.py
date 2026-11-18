@@ -31,6 +31,7 @@ def patch(decoded: Path, report: dict):
     main=r"""
 .method public showRevivalSettings()V
     .locals 5
+    invoke-direct {p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->applySavedRevivalSettings()V
     new-instance v0, Landroid/app/AlertDialog$Builder;
     invoke-direct {v0, p0}, Landroid/app/AlertDialog$Builder;-><init>(Landroid/content/Context;)V
     const-string v1, "REVIVAL MOD"
@@ -112,6 +113,32 @@ def patch(decoded: Path, report: dict):
     invoke-direct {v2, p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalGraphicsListener;-><init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;)V
     invoke-virtual {v0, v1, v2}, Landroid/app/AlertDialog$Builder;->setItems([Ljava/lang/CharSequence;Landroid/content/DialogInterface$OnClickListener;)Landroid/app/AlertDialog$Builder;
     invoke-virtual {v0}, Landroid/app/AlertDialog$Builder;->show()Landroid/app/AlertDialog;
+    return-void
+.end method
+"""
+
+    apply_saved=r"""
+.method private applySavedRevivalSettings()V
+    .locals 5
+    const-string v0, "abt_revival_mod"
+    const/4 v1, 0x0
+    invoke-virtual {p0, v0, v1}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
+    move-result-object v4
+    const-string v0, "fps_limit"
+    const/16 v1, 0x90
+    invoke-interface {v4, v0, v1}, Landroid/content/SharedPreferences;->getInt(Ljava/lang/String;I)I
+    move-result v1
+    invoke-static {v1}, Lcom/rovio/angrybirdstransformers/RevivalNative;->setFps(I)I
+    const-string v0, "graphics_profile"
+    const/4 v1, -0x1
+    invoke-interface {v4, v0, v1}, Landroid/content/SharedPreferences;->getInt(Ljava/lang/String;I)I
+    move-result v1
+    if-ltz v1, :saved_done
+    invoke-static {}, Lcom/rovio/angrybirdstransformers/RevivalNative;->getGraphicsLevel()I
+    move-result v2
+    if-eq v1, v2, :saved_done
+    invoke-static {v1}, Lcom/rovio/angrybirdstransformers/RevivalNative;->setGraphicsLevel(I)I
+    :saved_done
     return-void
 .end method
 """
@@ -226,10 +253,10 @@ def patch(decoded: Path, report: dict):
 .end method
 """
     # Remove previous helpers if this patch is rerun, then append new versions.
-    for name in ("showRevivalSettings()V","showRevivalFpsDialog()V","showRevivalGraphicsDialog()V","applyRevivalFps(I)V","applyRevivalGraphics(I)V"):
+    for name in ("showRevivalSettings()V","showRevivalFpsDialog()V","showRevivalGraphicsDialog()V","applyRevivalFps(I)V","applyRevivalGraphics(I)V","applySavedRevivalSettings()V"):
         pat=re.compile(r"(?ms)^\.method[^\n]*\b"+re.escape(name)+r".*?^\.end method\n?")
         source=pat.sub("",source)
-    source += "\n"+main+"\n"+fps_dialog+"\n"+graphics_dialog+"\n"+apply_fps+"\n"+apply_graphics
+    source += "\n"+main+"\n"+fps_dialog+"\n"+graphics_dialog+"\n"+apply_saved+"\n"+apply_fps+"\n"+apply_graphics
     path.write_text(source,encoding="utf-8")
 
     smali_root=next((p for p in path.parents if p.name.startswith("smali")),None)
