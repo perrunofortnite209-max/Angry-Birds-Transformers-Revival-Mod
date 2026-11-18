@@ -52,6 +52,18 @@ jobs:
         run: python tools/trace_render_scale_globals.py "$APK" "$RUNNER_TEMP/out/render-scale-global-references.txt"
       - name: Trace explosion and particle hotspots
         run: python tools/trace_explosion_hotspots.py "$APK" "$RUNNER_TEMP/out/explosion-particle-hotspots.txt"
+      - name: Inventory packaged device and graphics configuration archives
+        run: |
+          python - "$APK" "$RUNNER_TEMP/out/pak-inventory.txt" <<'PY'
+          import sys, zipfile
+          from pathlib import Path
+          apk, report = sys.argv[1:]
+          with zipfile.ZipFile(apk) as z:
+              rows = [f"{x.filename} | {x.file_size} bytes" for x in z.infolist()
+                      if not x.is_dir() and x.filename.lower().endswith(".pak")]
+          Path(report).write_text("\n".join(rows) + "\n", encoding="utf-8")
+          print("\n".join(rows))
+          PY
       - name: Upload text report
         uses: actions/upload-artifact@v4
         with:
@@ -62,5 +74,6 @@ jobs:
             ${{ runner.temp }}/out/render-scale-reference-trace.txt
             ${{ runner.temp }}/out/render-scale-global-references.txt
             ${{ runner.temp }}/out/explosion-particle-hotspots.txt
+            ${{ runner.temp }}/out/pak-inventory.txt
           if-no-files-found: error
           retention-days: 7
