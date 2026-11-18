@@ -177,6 +177,9 @@ def patch(decoded: Path, report: dict):
     apply_graphics=r"""
 .method public applyRevivalGraphics(I)V
     .locals 5
+    invoke-static {p1}, Lcom/rovio/angrybirdstransformers/RevivalNative;->setGraphicsLevel(I)I
+    move-result v0
+    if-lez v0, :graphics_failed
     const-string v1, "abt_revival_mod"
     const/4 v2, 0x0
     invoke-virtual {p0, v1, v2}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
@@ -188,19 +191,22 @@ def patch(decoded: Path, report: dict):
     move-result-object v1
     invoke-interface {v1}, Landroid/content/SharedPreferences$Editor;->apply()V
     packed-switch p1, :graphics_switch_data
-    const-string v3, "Perfil guardado; el motor aún no confirma el cambio."
+    const-string v3, "Perfil gráfico aplicado."
     goto :graphics_toast
     :graphics_low
-    const-string v3, "Calidad baja guardada; aplicación pendiente de validar."
+    const-string v3, "Calidad baja aplicada."
     goto :graphics_toast
     :graphics_medium
-    const-string v3, "Calidad media guardada; aplicación pendiente de validar."
+    const-string v3, "Calidad media aplicada."
     goto :graphics_toast
     :graphics_high
-    const-string v3, "Calidad alta guardada; aplicación pendiente de validar."
+    const-string v3, "Calidad alta aplicada."
     goto :graphics_toast
     :graphics_extra
-    const-string v3, "Calidad extraalta guardada; aplicación pendiente de validar."
+    const-string v3, "Calidad extraalta aplicada."
+    goto :graphics_toast
+    :graphics_failed
+    const-string v3, "El motor no pudo aplicar el perfil gráfico."
     :graphics_toast
     const/4 v2, 0x0
     invoke-static {p0, v3, v2}, Landroid/widget/Toast;->makeText(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;
