@@ -31,22 +31,25 @@ jobs:
           import pandas as pd
 
           out = []
+          def run(sql):
+              return tp.query(sql).as_pandas_dataframe()
+
           def section(title, df):
               out.append("\\n## " + title + "\\n")
-              if df is None or df.empty:
+              if df is None or len(df.index) == 0:
                   out.append("(sin datos)\\n")
               else:
                   out.append(df.to_string(index=False) + "\\n")
 
           tp = TraceProcessor(trace="abt.pftrace")
           try:
-              stats = tp.query("SELECT name, value FROM stats ORDER BY name")
+              stats = run("SELECT name, value FROM stats ORDER BY name")
               section("Trace stats", stats)
           except Exception as e:
               out.append("\\nStats no disponibles: " + str(e) + "\\n")
 
           try:
-              slices = tp.query("""
+              slices = run("""
                 SELECT name, COUNT(*) AS events,
                        ROUND(SUM(dur)/1e9, 3) AS total_seconds,
                        ROUND(MAX(dur)/1e6, 3) AS max_ms
@@ -58,7 +61,7 @@ jobs:
               out.append("\\nSlices no disponibles: " + str(e) + "\\n")
 
           try:
-              sched = tp.query("""
+              sched = run("""
                 SELECT th.name AS thread, COUNT(*) AS slices,
                        ROUND(SUM(sc.dur)/1e9, 3) AS running_seconds,
                        ROUND(MAX(sc.dur)/1e6, 3) AS max_run_ms,
@@ -72,12 +75,12 @@ jobs:
               out.append("\\nSched no disponible: " + str(e) + "\\n")
 
           try:
-              counters = tp.query("""
+              counters = run("""
                 SELECT t.name AS counter, COUNT(*) AS samples,
                        ROUND(MIN(c.value), 2) AS min_value,
                        ROUND(AVG(c.value), 2) AS avg_value,
                        ROUND(MAX(c.value), 2) AS max_value
-                FROM counter c JOIN counter_track t USING(track_id)
+                FROM counter c JOIN counter_track t ON t.id = c.track_id
                 GROUP BY t.name ORDER BY t.name LIMIT 100
               """)
               section("Counter tracks", counters)
