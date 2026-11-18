@@ -62,9 +62,8 @@ jobs:
           with zipfile.ZipFile(apk) as z:
               rows = [f"{x.filename} | {x.file_size} bytes" for x in z.infolist()
                       if not x.is_dir() and x.filename.lower().endswith(".pak")]
-          Path(report).write_text("\\n".join(rows) + "
-", encoding="utf-8")
-          print("\\n".join(rows))
+          Path(report).write_text("\n".join(rows) + "\n", encoding="utf-8")
+          print("\n".join(rows))
           PY
       - name: Extract and inspect deviceconfigs.pak
         run: |
@@ -77,9 +76,8 @@ jobs:
           with zipfile.ZipFile(apk) as z:
               blob = z.read("assets/data/deviceconfigs.pak")
           lines = parse_pak(blob, "assets/data/deviceconfigs.pak", out_dir)
-          Path(report).write_text("\\n".join(lines) + "
-", encoding="utf-8")
-          print("\\n".join(lines[:120]))
+          Path(report).write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("\n".join(lines[:120]))
           PY
       - name: Trace particle manager internals (read-only)
         run: python tools/trace_particle_manager_detail.py "$APK" "$RUNNER_TEMP/out/particle-manager-detail.txt"
