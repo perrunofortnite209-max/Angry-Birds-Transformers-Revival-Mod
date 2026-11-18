@@ -1,0 +1,169 @@
+name: Analyze Perfetto game trace
+
+on:
+  push:
+    branches:
+      - feature/full-revival-mod
+    paths:
+      - .github/workflows/analyze-perfetto-trace.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download the existing trace
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 \
+            "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/xgs-perfetto-20261118-011114.pftrace" \
+            -o xgs-perfetto.pftrace
+          echo "6d650622500d4bfbe672dbc7eda03585b8336068bbe0bf62c2aea656a94ba0ae  xgs-perfetto.pftrace" | sha256sum -c -
+
+      - name: Install Perfetto Trace Processor
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 https://get.perfetto.dev/trace_processor -o trace_processor
+          chmod +x trace_processor
+          ./trace_processor --version || ./trace_processor --help >/dev/null
+
+      - name: Export trace tables and build readable report
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./trace_processor export sqlite -o trace.sqlite xgs-perfetto.pftrace
+          python3 - <<'PY'
+          import sqlite3, os, json, hashlib
+          from pathlib import Path
+
+          db = sqlite3.connect("trace.sqlite")
+          db.row_factory = sqlite3.Row
+          out = []
+          def section(title):
+              out.append("\\n## " + title)
+          def rows(sql, params=()):
+              try:
+                  return [dict(r) for r in db.execute(sql, params).fetchall()]
+              except Exception as e:
+                  out.append("Query unavailable: " + str(e))
+                  return []
+          def table_names():
+              return {r["name"] for r in rows("SELECT name FROM sqlite_master WHERE type IN ('table','view')")}
+          names = table_names()
+          def cols(name):
+              try:
+                  return {r["name"] for r in db.execute('PRAGMA table_info("' + name.replace('"','""') + '")')}
+              except Exception:
+                  return set()
+          out.append("# Angry Birds Transformers — Perfetto trace analysis")
+          out.append("")
+          out.append("- Trace file: xgs-perfetto-20261118-011114.pftrace")
+          out.append("- Trace SHA-256: 6d650622500d4bfbe672dbc7eda03585b8336068bbe0bf62c2aea656a94ba0ae")
+          out.append("- SQLite export size: " + str(os.path.getsize("trace.sqlite")) + " bytes")
+          section("Trace metadata")
+          for t in ("trace_bounds", "trace_file", "metadata", "stats"):
+              if t in names:
+                  out.append("### " + t)
+                  out.append("```json")
+                  out.append(json.dumps(rows('SELECT * FROM "'+t+'" LIMIT 100'), indent=2, default=str))
+                  out.append("```")
+          section("Relevant tables and schemas")
+          relevant = sorted(n for n in names if any(k in n.lower() for k in ("frame","gpu","freq","idle","sched","thread","process","surface","display","slice","counter","track")))
+          out.append("Tables/views: " + ", ".join(relevant))
+          for t in relevant:
+              out.append("- **" + t + "**: " + ", ".join(sorted(cols(t))))
+          section("Processes and threads")
+          if "process" in names and "thread" in names:
+              out.append("```json")
+              out.append(json.dumps(rows("""
+                SELECT p.name AS process, p.pid, t.name AS thread, t.tid, t.utid
+                FROM thread t LEFT JOIN process p USING(upid)
+                WHERE p.name LIKE '%rovio%' OR p.name LIKE '%android%' OR
+                      t.name LIKE '%Render%' OR t.name LIKE '%GL%' OR t.name LIKE '%Game%'
+                ORDER BY p.name, t.name LIMIT 250
+              """), indent=2, default=str))
+              out.append("```")
+          section("CPU scheduling — busiest threads")
+          if "sched" in names and "thread" in names:
+              sc, tc = cols("sched"), cols("thread")
+              if {"utid","dur","cpu"} <= sc and {"utid","name"} <= tc:
+                  joins = "LEFT JOIN process p USING(upid)" if "upid" in tc and "process" in names else ""
+                  proc = "p.name AS process," if joins else ""
+                  sql = f"""
+                    SELECT {proc} t.name AS thread, s.cpu,
+                           COUNT(*) AS running_slices,
+                           ROUND(SUM(s.dur)/1e9,3) AS running_seconds,
+                           ROUND(AVG(s.dur)/1e6,3) AS avg_slice_ms,
+                           ROUND(MAX(s.dur)/1e6,3) AS max_slice_ms
+                    FROM sched s JOIN thread t USING(utid) {joins}
+                    GROUP BY {('p.name,' if joins else '')} t.name, s.cpu
+                    ORDER BY SUM(s.dur) DESC LIMIT 80
+                  """
+                  out.append("```json")
+                  out.append(json.dumps(rows(sql), indent=2, default=str))
+                  out.append("```")
+          section("Thread state / blocked / runnable clues")
+          if "thread_state" in names:
+              c = cols("thread_state")
+              wanted = [x for x in ("utid","state","dur","cpu","io_wait","blocked_function","waker_utid") if x in c]
+              if {"utid","state","dur"} <= c:
+                  sel = ", ".join('ts."' + x + '"' for x in wanted)
+                  out.append("```json")
+                  out.append(json.dumps(rows(f"""
+                    SELECT t.name AS thread, {sel.replace('ts."utid"', 'ts."utid"')}
+                    FROM thread_state ts LEFT JOIN thread t USING(utid)
+                    WHERE ts.dur > 0
+                    ORDER BY ts.dur DESC LIMIT 150
+                  """), indent=2, default=str))
+                  out.append("```")
+          section("CPU frequency and idle")
+          for t in ("cpu_freq","cpu_frequency","cpu_idle"):
+              if t in names:
+                  out.append("### " + t)
+                  out.append("```json")
+                  out.append(json.dumps(rows('SELECT * FROM "'+t+'" LIMIT 200'), indent=2, default=str))
+                  out.append("```")
+          section("Frame timeline / rendering evidence")
+          for t in sorted(n for n in names if "frame" in n.lower() or "gpu" in n.lower() or "surface" in n.lower()):
+              c = cols(t)
+              out.append("### " + t)
+              if c:
+                  out.append("```json")
+                  out.append(json.dumps(rows('SELECT * FROM "'+t+'" LIMIT 120'), indent=2, default=str))
+                  out.append("```")
+          section("Relevant named slices")
+          if "slice" in names:
+              c = cols("slice")
+              if {"name","ts","dur"} <= c:
+                  out.append("```json")
+                  out.append(json.dumps(rows("""
+                    SELECT name, COUNT(*) AS count,
+                           ROUND(SUM(dur)/1e9,3) AS total_seconds,
+                           ROUND(AVG(dur)/1e6,3) AS avg_ms,
+                           ROUND(MAX(dur)/1e6,3) AS max_ms
+                    FROM slice
+                    WHERE lower(name) LIKE '%frame%' OR lower(name) LIKE '%render%'
+                       OR lower(name) LIKE '%egl%' OR lower(name) LIKE '%swap%'
+                       OR lower(name) LIKE '%gpu%' OR lower(name) LIKE '%surface%'
+                    GROUP BY name ORDER BY SUM(dur) DESC LIMIT 100
+                  """), indent=2, default=str))
+                  out.append("```")
+          Path("PERFETTO_ANALYSIS.md").write_text("\\n".join(out) + "\\n", encoding="utf-8")
+          print("Created PERFETTO_ANALYSIS.md (" + str(Path("PERFETTO_ANALYSIS.md").stat().st_size) + " bytes)")
+          PY
+
+      - name: Upload readable analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: perfetto-readable-analysis
+          path: |
+            PERFETTO_ANALYSIS.md
+            trace.sqlite
+          if-no-files-found: error
+          retention-days: 14
