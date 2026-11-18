@@ -54,6 +54,28 @@ for sec in elf.iter_sections():
         if sym.name and int(sym.entry.st_size):
             symbols.setdefault(int(sym.entry.st_value), (sym.name, int(sym.entry.st_size)))
 by_addr = {a:n for a,(n,s) in symbols.items()}
+# Resolve direct callers of the render-scale and backbuffer helpers.
+xref_targets = {
+    0x483f80: "CRenderManager::ScaleRenderTargetRes",
+    0x484b38: "CRenderManager::Get3DBackbufferResolution",
+    0x844158: "CXGSDisplayOGL::CreateRenderTargets",
+    0x844660: "CXGSDisplayOGL::PresentScene",
+    0x840f30: "CXGSDisplayProviderGLES::OnResize",
+    0x6e2270: "CApp::ResetViewport",
+}
+xrefs = {address: [] for address in xref_targets}
+for ins in md.disasm(text, base):
+    if ins.mnemonic == "bl" and ins.operands and ins.operands[0].type == CS_OP_IMM:
+        dest = int(ins.operands[0].imm)
+        if dest in xrefs:
+            owner_addr = max((a for a in symbols if a <= ins.address), default=None)
+            owner = symbols.get(owner_addr, ("<unknown>", 0))[0]
+            xrefs[dest].append((ins.address, owner))
+out.append("## Resolution helper direct caller cross-references")
+for address, label in xref_targets.items():
+    out.append(f"- {label} @ {address:#x}: {len(xrefs[address])} callers")
+    for callsite, owner in xrefs[address]:
+        out.append(f"  - callsite {callsite:#x} in {owner}")
 md = Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN)
 md.detail = True
 out = [
