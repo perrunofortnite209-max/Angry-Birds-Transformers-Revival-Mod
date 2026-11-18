@@ -146,5 +146,5 @@ PYPAK
 
 echo >> "$REPORT"
 echo "=== XGS v2/zlib UI PAK extraction and text inventory ===" >> "$REPORT"
-python3 tools/extract_xgs_pak.py "$APK" --out "$RUNNER_TEMP/xgs-ui-extracted" --report "$OUT/xgs-pak-inventory.txt" >> "$REPORT"
+python3 tools/extract_xgs_pak.py "$APK" --all-paks --out "$RUNNER_TEMP/xgs-ui-extracted" --report "$OUT/xgs-pak-inventory.txt" >> "$REPORT"
 cat "$OUT/xgs-pak-inventory.txt" >> "$REPORT"
