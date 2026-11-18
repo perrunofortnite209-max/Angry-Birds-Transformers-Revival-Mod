@@ -81,7 +81,7 @@ def main():
    if any(names.count(p)!=1 for p in TARGETS): raise RuntimeError("Falta una biblioteca nativa o está duplicada")
    replacements={p:patch_lib(p,original.read(p),report) for p in TARGETS}
    icon_names=[n for n in names if is_icon(n)]
-   if len(icon_names)!=7: raise RuntimeError(f"Expected 7 launcher PNGs, found {len(icon_names)}: {icon_names}")
+   if len(icon_names)!=7:\n     candidates=[n for n in names if "app_icon" in n.lower() or ("drawable" in n.lower() and n.lower().endswith((".png",".webp")))]\n     raise RuntimeError(f"Expected 7 launcher PNGs, found {len(icon_names)}: {icon_names}; nearby resource entries: {candidates[:80]}")
    before={n:sha(original.read(n)) for n in names if not is_dex(n) and n not in TARGETS and not is_icon(n) and not is_sig(n)}
    with zipfile.ZipFile(a.out,"w") as out:
     for info in original.infolist():
