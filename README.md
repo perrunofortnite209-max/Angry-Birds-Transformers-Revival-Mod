@@ -65,6 +65,16 @@ bash tools/verify-apk.sh /ruta/al/juego.apk
 
 Estas utilidades permiten consultar metadatos, arquitecturas y firma del APK. No modifican el juego por sí mismas.
 
+El codificador experimental de XML XOX2 permite reconstruir contenedores XML individuales para investigación:
+
+```bash
+python tools/xox2_codec.py ajustes.xml ajustes.xox2
+python tools/xox2_codec.py --decode ajustes.xox2 ajustes.xml
+python tools/xox2_codec.py --self-test
+```
+
+Consulta [XOX2_CODEC.md](docs/XOX2_CODEC.md) para conocer su validación y sus límites. El codificador todavía no modifica ni reconstruye archivos PAK.
+
 ## Aviso legal
 
 Revival Mod es un proyecto fan independiente, no oficial y sin afiliación, respaldo ni patrocinio de Rovio Entertainment, SEGA o sus compañías relacionadas.
