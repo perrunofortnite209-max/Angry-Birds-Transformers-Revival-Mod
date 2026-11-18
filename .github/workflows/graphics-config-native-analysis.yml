@@ -79,6 +79,25 @@ jobs:
           Path(report).write_text("\n".join(lines) + "\n", encoding="utf-8")
           print("\n".join(lines[:120]))
           PY
+      - name: Extract VFXLimitConfig.xml from xml.pak
+        run: |
+          python - "$APK" "$RUNNER_TEMP/out/xml-extracted" "$RUNNER_TEMP/out/vfx-limit-config-report.txt" <<'PY'
+          import sys, zipfile
+          from pathlib import Path
+          sys.path.insert(0, "tools")
+          from extract_xgs_pak import parse_pak
+          apk, out_dir, report = sys.argv[1:]
+          with zipfile.ZipFile(apk) as z:
+              blob = z.read("assets/data/xml.pak")
+          lines = parse_pak(blob, "assets/data/xml.pak", out_dir)
+          matches = [line for line in lines if "VFXLimitConfig.xml" in line]
+          Path(report).write_text("\\n".join(matches) + "\\n", encoding="utf-8")
+          print("\\n".join(matches) if matches else "VFXLimitConfig.xml not listed by parser")
+          for p in Path(out_dir).rglob("*"):
+              if p.is_file() and p.name.lower() == "vfxlimitconfig.xml":
+                  print("---- extracted config ----")
+                  print(p.read_text(encoding="utf-8", errors="replace"))
+          PY
       - name: Trace particle manager internals (read-only)
         run: python tools/trace_particle_manager_detail.py "$APK" "$RUNNER_TEMP/out/particle-manager-detail.txt"
       - name: Upload text report
