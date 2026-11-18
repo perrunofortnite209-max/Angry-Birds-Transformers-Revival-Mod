@@ -1,0 +1,28 @@
+name: Validate XOX2 codec
+
+on:
+  push:
+    branches:
+      - feature/full-revival-mod
+    paths:
+      - "tools/xox2_codec.py"
+      - ".github/workflows/validate-xox2-codec.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  codec-self-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile Python source
+        run: python -m py_compile tools/xox2_codec.py
+      - name: Run XOX2 round-trip tests
+        run: python tools/xox2_codec.py --self-test
