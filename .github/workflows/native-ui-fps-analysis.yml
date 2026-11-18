@@ -1,0 +1,65 @@
+name: Native UI and FPS implementation analysis
+
+on:
+  push:
+    branches: [feature/full-revival-mod]
+    paths:
+      - "tools/analyze_native_ui.py"
+      - ".github/workflows/native-ui-fps-analysis.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-revival-mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ELF analysis tools
+        run: python -m pip install pyelftools capstone
+      - name: Download original APK privately
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/private" "$RUNNER_TEMP/native" "$RUNNER_TEMP/out"
+          gh release download game --repo "$GITHUB_REPOSITORY" --pattern "*.apk" --dir "$RUNNER_TEMP/private"
+          APK="$(find "$RUNNER_TEMP/private" -maxdepth 1 -name '*.apk' -print -quit)"
+          test -n "$APK"
+          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  $APK" | sha256sum -c -
+          python - "$APK" "$RUNNER_TEMP/native" <<'PY'
+          import sys,zipfile
+          from pathlib import Path
+          apk,out=Path(sys.argv[1]),Path(sys.argv[2])
+          with zipfile.ZipFile(apk) as z:
+              for n in ("lib/arm64-v8a/libABBS.so","lib/armeabi-v7a/libABBS.so"):
+                  (out/Path(n).name).write_bytes(z.read(n))
+          PY
+      - name: Analyze ARM64 native UI and FPS functions
+        run: |
+          set -euo pipefail
+          python tools/analyze_native_ui.py "$RUNNER_TEMP/native/libABBS.so" "$RUNNER_TEMP/out/arm64-native-analysis.txt"
+          python - "$RUNNER_TEMP/native/libABBS.so" "$RUNNER_TEMP/out/elf-symbols.txt" <<'PY'
+          import subprocess,sys
+          from pathlib import Path
+          p=Path(sys.argv[1]); out=Path(sys.argv[2])
+          cmds=[["readelf","-Ws",str(p)],["readelf","-S",str(p)],["strings","-a","-t","x",str(p)]]
+          with out.open("w") as f:
+              for cmd in cmds:
+                  f.write("\n### "+" ".join(cmd)+"\n")
+                  r=subprocess.run(cmd,text=True,capture_output=True)
+                  f.write(r.stdout)
+          PY
+      - name: Upload text-only native analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-ui-fps-analysis
+          path: ${{ runner.temp }}/out/
+          retention-days: 7
