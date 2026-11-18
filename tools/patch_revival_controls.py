@@ -1,0 +1,319 @@
+#!/usr/bin/env python3
+"""Replace the placeholder MOD dialog with real JNI-backed FPS and graphics controls."""
+from __future__ import annotations
+import re
+from pathlib import Path
+
+DESC = "Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;"
+
+def find_activity(decoded: Path) -> Path:
+    hits=[]
+    for p in decoded.glob("smali*/**/*.smali"):
+        try: s=p.read_text(encoding="utf-8")
+        except UnicodeDecodeError: continue
+        if re.search(r"^\.class\b.*"+re.escape(DESC),s,re.M): hits.append(p)
+    if len(hits)!=1: raise RuntimeError(f"Activity not unique: {len(hits)}")
+    return hits[0]
+
+def method(name, body):
+    pattern=re.compile(r"(?ms)^\.method[^\n]*\b"+re.escape(name)+r"\b.*?^\.end method")
+    return pattern, body.strip()+"\n"
+
+def patch(decoded: Path, report: dict):
+    path=find_activity(decoded); source=path.read_text(encoding="utf-8")
+    # Preserve the existing auto-hide / haptics checkboxes under a separate submenu.
+    old_pattern=re.compile(r"(?ms)^\.method public showRevivalSettings\(\)V.*?^\.end method")
+    old=old_pattern.search(source)
+    if not old: raise RuntimeError("Existing floating-ball settings method not found")
+    old_method=old.group(0).replace("showRevivalSettings()V","showRevivalBallOptions()V",1)
+    source=source[:old.start()]+old_method+source[old.end():]
+    # Main menu.
+    main=r"""
+.method public showRevivalSettings()V
+    .locals 5
+    new-instance v0, Landroid/app/AlertDialog$Builder;
+    invoke-direct {v0, p0}, Landroid/app/AlertDialog$Builder;-><init>(Landroid/content/Context;)V
+    const-string v1, "REVIVAL MOD"
+    invoke-virtual {v0, v1}, Landroid/app/AlertDialog$Builder;->setTitle(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
+    const/4 v1, 0x3
+    new-array v1, v1, [Ljava/lang/CharSequence;
+    const-string v2, "Límite de FPS"
+    const/4 v3, 0x0
+    aput-object v2, v1, v3
+    const-string v2, "Calidad gráfica"
+    const/4 v3, 0x1
+    aput-object v2, v1, v3
+    const-string v2, "Opciones de la bolita"
+    const/4 v3, 0x2
+    aput-object v2, v1, v3
+    new-instance v2, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalMenuClickListener;
+    invoke-direct {v2, p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalMenuClickListener;-><init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;)V
+    invoke-virtual {v0, v1, v2}, Landroid/app/AlertDialog$Builder;->setItems([Ljava/lang/CharSequence;Landroid/content/DialogInterface$OnClickListener;)Landroid/app/AlertDialog$Builder;
+    invoke-virtual {v0}, Landroid/app/AlertDialog$Builder;->show()Landroid/app/AlertDialog;
+    return-void
+.end method
+"""
+    fps_dialog=r"""
+.method public showRevivalFpsDialog()V
+    .locals 5
+    new-instance v0, Landroid/app/AlertDialog$Builder;
+    invoke-direct {v0, p0}, Landroid/app/AlertDialog$Builder;-><init>(Landroid/content/Context;)V
+    const-string v1, "LÍMITE DE FPS"
+    invoke-virtual {v0, v1}, Landroid/app/AlertDialog$Builder;->setTitle(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
+    const/4 v1, 0x6
+    new-array v1, v1, [Ljava/lang/CharSequence;
+    const-string v2, "30 FPS"
+    const/4 v3, 0x0
+    aput-object v2, v1, v3
+    const-string v2, "60 FPS"
+    const/4 v3, 0x1
+    aput-object v2, v1, v3
+    const-string v2, "90 FPS"
+    const/4 v3, 0x2
+    aput-object v2, v1, v3
+    const-string v2, "120 FPS"
+    const/4 v3, 0x3
+    aput-object v2, v1, v3
+    const-string v2, "140 FPS"
+    const/4 v3, 0x4
+    aput-object v2, v1, v3
+    const-string v2, "Sin límite"
+    const/4 v3, 0x5
+    aput-object v2, v1, v3
+    new-instance v2, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalFpsListener;
+    invoke-direct {v2, p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalFpsListener;-><init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;)V
+    invoke-virtual {v0, v1, v2}, Landroid/app/AlertDialog$Builder;->setItems([Ljava/lang/CharSequence;Landroid/content/DialogInterface$OnClickListener;)Landroid/app/AlertDialog$Builder;
+    invoke-virtual {v0}, Landroid/app/AlertDialog$Builder;->show()Landroid/app/AlertDialog;
+    return-void
+.end method
+"""
+    graphics_dialog=r"""
+.method public showRevivalGraphicsDialog()V
+    .locals 5
+    new-instance v0, Landroid/app/AlertDialog$Builder;
+    invoke-direct {v0, p0}, Landroid/app/AlertDialog$Builder;-><init>(Landroid/content/Context;)V
+    const-string v1, "CALIDAD GRÁFICA"
+    invoke-virtual {v0, v1}, Landroid/app/AlertDialog$Builder;->setTitle(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
+    const/4 v1, 0x4
+    new-array v1, v1, [Ljava/lang/CharSequence;
+    const-string v2, "Baja  ·  android-generic_low"
+    const/4 v3, 0x0
+    aput-object v2, v1, v3
+    const-string v2, "Media  ·  android-generic_medium"
+    const/4 v3, 0x1
+    aput-object v2, v1, v3
+    const-string v2, "Alta  ·  android-generic_high"
+    const/4 v3, 0x2
+    aput-object v2, v1, v3
+    const-string v2, "Extraalta  ·  android-generic_extrahigh"
+    const/4 v3, 0x3
+    aput-object v2, v1, v3
+    new-instance v2, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalGraphicsListener;
+    invoke-direct {v2, p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalGraphicsListener;-><init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;)V
+    invoke-virtual {v0, v1, v2}, Landroid/app/AlertDialog$Builder;->setItems([Ljava/lang/CharSequence;Landroid/content/DialogInterface$OnClickListener;)Landroid/app/AlertDialog$Builder;
+    invoke-virtual {v0}, Landroid/app/AlertDialog$Builder;->show()Landroid/app/AlertDialog;
+    return-void
+.end method
+"""
+    apply_fps=r"""
+.method public applyRevivalFps(I)V
+    .locals 5
+    packed-switch p1, :fps_switch_data
+    const/4 v0, -0x1
+    goto :fps_call
+    :fps_30
+    const/16 v0, 0x1e
+    goto :fps_call
+    :fps_60
+    const/16 v0, 0x3c
+    goto :fps_call
+    :fps_90
+    const/16 v0, 0x5a
+    goto :fps_call
+    :fps_120
+    const/16 v0, 0x78
+    goto :fps_call
+    :fps_140
+    const/16 v0, 0x8c
+    goto :fps_call
+    :fps_unlimited
+    const/4 v0, 0x0
+    :fps_call
+    invoke-static {v0}, Lcom/rovio/angrybirdstransformers/RevivalNative;->setFps(I)I
+    move-result v1
+    if-lez v1, :fps_failed
+    const-string v2, "abt_revival_mod"
+    const/4 v3, 0x0
+    invoke-virtual {p0, v2, v3}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
+    move-result-object v2
+    invoke-interface {v2}, Landroid/content/SharedPreferences;->edit()Landroid/content/SharedPreferences$Editor;
+    move-result-object v2
+    const-string v3, "fps_limit"
+    invoke-interface {v2, v3, v0}, Landroid/content/SharedPreferences$Editor;->putInt(Ljava/lang/String;I)Landroid/content/SharedPreferences$Editor;
+    move-result-object v2
+    invoke-interface {v2}, Landroid/content/SharedPreferences$Editor;->apply()V
+    const-string v2, "Límite FPS aplicado"
+    goto :fps_toast
+    :fps_failed
+    const-string v2, "No se pudo aplicar el límite FPS"
+    :fps_toast
+    const/4 v3, 0x0
+    invoke-static {p0, v2, v3}, Landroid/widget/Toast;->makeText(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;
+    move-result-object v4
+    invoke-virtual {v4}, Landroid/widget/Toast;->show()V
+    return-void
+    :fps_switch_data
+    .packed-switch 0x0
+        :fps_30
+        :fps_60
+        :fps_90
+        :fps_120
+        :fps_140
+        :fps_unlimited
+    .end packed-switch
+.end method
+"""
+    apply_graphics=r"""
+.method public applyRevivalGraphics(I)V
+    .locals 5
+    invoke-static {p1}, Lcom/rovio/angrybirdstransformers/RevivalNative;->setGraphicsLevel(I)I
+    move-result v0
+    if-lez v0, :graphics_failed
+    const-string v1, "abt_revival_mod"
+    const/4 v2, 0x0
+    invoke-virtual {p0, v1, v2}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
+    move-result-object v1
+    invoke-interface {v1}, Landroid/content/SharedPreferences;->edit()Landroid/content/SharedPreferences$Editor;
+    move-result-object v1
+    const-string v2, "graphics_profile"
+    invoke-interface {v1, v2, p1}, Landroid/content/SharedPreferences$Editor;->putInt(Ljava/lang/String;I)Landroid/content/SharedPreferences$Editor;
+    move-result-object v1
+    invoke-interface {v1}, Landroid/content/SharedPreferences$Editor;->apply()V
+    packed-switch p1, :graphics_switch_data
+    const-string v3, "Perfil gráfico aplicado"
+    goto :graphics_toast
+    :graphics_low
+    const-string v3, "Calidad baja aplicada"
+    goto :graphics_toast
+    :graphics_medium
+    const-string v3, "Calidad media aplicada"
+    goto :graphics_toast
+    :graphics_high
+    const-string v3, "Calidad alta aplicada"
+    goto :graphics_toast
+    :graphics_extra
+    const-string v3, "Calidad extraalta aplicada"
+    :graphics_toast
+    const/4 v2, 0x0
+    invoke-static {p0, v3, v2}, Landroid/widget/Toast;->makeText(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;
+    move-result-object v4
+    invoke-virtual {v4}, Landroid/widget/Toast;->show()V
+    return-void
+    :graphics_failed
+    const-string v3, "El motor no permitió cambiar ese perfil"
+    const/4 v2, 0x0
+    invoke-static {p0, v3, v2}, Landroid/widget/Toast;->makeText(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;
+    move-result-object v4
+    invoke-virtual {v4}, Landroid/widget/Toast;->show()V
+    return-void
+    :graphics_switch_data
+    .packed-switch 0x0
+        :graphics_low
+        :graphics_medium
+        :graphics_high
+        :graphics_extra
+    .end packed-switch
+.end method
+"""
+    # Remove previous helpers if this patch is rerun, then append new versions.
+    for name in ("showRevivalSettings()V","showRevivalFpsDialog()V","showRevivalGraphicsDialog()V","applyRevivalFps(I)V","applyRevivalGraphics(I)V"):
+        pat=re.compile(r"(?ms)^\.method[^\n]*\b"+re.escape(name)+r".*?^\.end method\n?")
+        source=pat.sub("",source)
+    source += "\n"+main+"\n"+fps_dialog+"\n"+graphics_dialog+"\n"+apply_fps+"\n"+apply_graphics
+    path.write_text(source,encoding="utf-8")
+
+    smali_root=next((p for p in path.parents if p.name.startswith("smali")),None)
+    if smali_root is None: raise RuntimeError("smali root not found")
+    base=smali_root/"com/rovio/angrybirdstransformers"; base.mkdir(parents=True,exist_ok=True)
+    (base/"RevivalNative.smali").write_text(r"""
+.class public final Lcom/rovio/angrybirdstransformers/RevivalNative;
+.super Ljava/lang/Object;
+.method static constructor <clinit>()V
+    .locals 1
+    const-string v0, "abtmod"
+    invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V
+    return-void
+.end method
+.method public static native setFps(I)I
+.end method
+.method public static native getGraphicsLevel()I
+.end method
+.method public static native changeGraphics(I)I
+.end method
+.method public static native setGraphicsLevel(I)I
+.end method
+""".strip()+"\n",encoding="utf-8")
+    (base/"AngryBirdsTransformersActivity$RevivalMenuClickListener.smali").write_text(r"""
+.class public final Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalMenuClickListener;
+.super Ljava/lang/Object;
+.implements Landroid/content/DialogInterface$OnClickListener;
+.field private final activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+.method public constructor <init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;)V
+ .locals 0
+ invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+ iput-object p1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalMenuClickListener;->activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+ return-void
+.end method
+.method public onClick(Landroid/content/DialogInterface;I)V
+ .locals 1
+ iget-object v0, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalMenuClickListener;->activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+ if-nez p2, :menu_graphics
+ invoke-virtual {v0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->showRevivalFpsDialog()V
+ return-void
+ :menu_graphics
+ const/4 v1, 0x1
+ if-ne p2, v1, :menu_ball
+ invoke-virtual {v0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->showRevivalGraphicsDialog()V
+ return-void
+ :menu_ball
+ invoke-virtual {v0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->showRevivalBallOptions()V
+ return-void
+.end method
+""".strip()+"\n",encoding="utf-8")
+    (base/"AngryBirdsTransformersActivity$RevivalFpsListener.smali").write_text(r"""
+.class public final Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalFpsListener;
+.super Ljava/lang/Object;
+.implements Landroid/content/DialogInterface$OnClickListener;
+.field private final activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+.method public constructor <init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;)V
+ .locals 0
+ invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+ iput-object p1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalFpsListener;->activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+ return-void
+.end method
+.method public onClick(Landroid/content/DialogInterface;I)V
+ .locals 1
+ iget-object v0, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalFpsListener;->activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+ invoke-virtual {v0, p2}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->applyRevivalFps(I)V
+ return-void
+.end method
+""".strip()+"\n",encoding="utf-8")
+    (base/"AngryBirdsTransformersActivity$RevivalGraphicsListener.smali").write_text(r"""
+.class public final Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalGraphicsListener;
+.super Ljava/lang/Object;
+.implements Landroid/content/DialogInterface$OnClickListener;
+.field private final activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+.method public constructor <init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;)V
+ .locals 0
+ invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+ iput-object p1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalGraphicsListener;->activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+ return-void
+.end method
+.method public onClick(Landroid/content/DialogInterface;I)V
+ .locals 1
+ iget-object v0, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalGraphicsListener;->activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+ invoke-virtual {v0, p2}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->applyRevivalGraphics(I)V
+ return-void
+.end method
+""".strip()+"\n",encoding="utf-8")
+    report["runtime_controls"]={"fps_options":[30,60,90,120,140,"unlimited"],"graphics_profiles":["android-generic_low","android-generic_medium","android-generic_high","android-generic_extrahigh"],"graphics_switch":"CDeviceConfig::ChangePerformance","jni_bridge":True}
