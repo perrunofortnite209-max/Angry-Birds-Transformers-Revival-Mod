@@ -15,7 +15,7 @@ REPORT="$OUT/android-integration-report.txt"
   aapt dump badging "$APK" | grep -E "^(package:|launchable-activity:|sdkVersion:|targetSdkVersion:|native-code:)" || true
   echo
   echo "=== Decode AndroidManifest.xml (private workspace) ==="
-  apktool d -f -s "$APK" -o "$DECODE" >/dev/null
+  apktool d -f "$APK" -o "$DECODE" >/dev/null
   if [[ -f "$DECODE/AndroidManifest.xml" ]]; then
     cp "$DECODE/AndroidManifest.xml" "$OUT/AndroidManifest-decoded.xml"
     grep -Eo 'android:name="[^"]+"|android:exported="[^"]+"|android:configChanges="[^"]+"' "$DECODE/AndroidManifest.xml" | sort -u | head -n 240 || true
