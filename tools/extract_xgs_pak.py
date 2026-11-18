@@ -27,13 +27,13 @@ def parse_pak(blob, label, out_dir):
         return blob[pos:end].decode("utf-8", "replace")
     folder_rows = []
     for i in range(folders):
-        row = struct.unpack_from("<8I", blob, folder_base + i * 32)
+        row = struct.unpack_from("<QQQII", blob, folder_base + i * 32)
         folder_rows.append(row)
     file_rows = []
     for i in range(files):
-        row = struct.unpack_from("<8I", blob, file_base + i * 32)
+        row = struct.unpack_from("<QIIIIQ", blob, file_base + i * 32)
         file_rows.append(row)
-    # XGS v1/v2 folder rows: dummy,name,dummy,filesPos,dummy,foldersPos,fileCount,folderCount.
+    # KPX folder rows: u64 name, u64 filesPos, u64 foldersPos, u32 fileCount, u32 folderCount.
     paths = {}
     visiting = set()
     def walk(folder_idx, prefix=""):
@@ -41,13 +41,13 @@ def parse_pak(blob, label, out_dir):
             raise ValueError(f"{label}: invalid/cyclic folder index {folder_idx}")
         visiting.add(folder_idx)
         row = folder_rows[folder_idx]
-        name = cstr(row[1])
+        name = cstr(row[0])
         here = "/".join(x for x in (prefix, name) if x)
-        fpos, fcount, dpos, dcount = row[3], row[6], row[5], row[7]
+        fpos, dpos, fcount, dcount = row[1], row[2], row[3], row[4]
         if fpos + fcount > files or dpos + dcount > folders:
             raise ValueError(f"{label}: folder {folder_idx} index range outside tables")
         for fi in range(fpos, fpos + fcount):
-            paths[fi] = "/".join(x for x in (here, cstr(file_rows[fi][1])) if x)
+            paths[fi] = "/".join(x for x in (here, cstr(file_rows[fi][0])) if x)
         for di in range(dpos, dpos + dcount):
             walk(di, here)
         visiting.remove(folder_idx)
@@ -60,7 +60,7 @@ def parse_pak(blob, label, out_dir):
     lines = [f"PAK {label}: version={version} magic=KPX folders={folders} files={files} content_table_bytes={table_size} compression={compression}"]
     text_ext = {".xml", ".atlas", ".txt", ".json", ".manifest", ".ini", ".csv"}
     for i, row in enumerate(file_rows):
-        name_off, unpacked, offset, compressed, timestamp, packed, _ = row[1:]
+        name_off, unpacked, offset, compressed, timestamp, packed = row
         name = paths.get(i) or cstr(name_off)
         if offset > len(blob) or packed > len(blob) - offset:
             raise ValueError(f"{label}: payload bounds invalid for entry {i} ({name})")
