@@ -106,6 +106,28 @@ jobs:
           Path("output/inspection.json").write_text(json.dumps(report,indent=2)+"\n")
           print(json.dumps(report,indent=2))
           PY
+      - name: Inspect exact launcher icon mapping
+        run: |
+          set -euo pipefail
+          {
+            echo '=== AAPT BADGING ==='
+            aapt dump badging input/original.apk | head -40 || true
+            echo '=== DECODED RESOURCE FILES ==='
+            find decoded/res -type f -printf '%P\\n' | sort
+            echo '=== RESOURCE TABLE ICON REFERENCES ==='
+            grep -RniE 'app_icon|ic_launcher|android:icon|mipmap.*icon|drawable.*icon' decoded/res decoded/AndroidManifest.xml | head -250 || true
+            echo '=== PUBLIC RESOURCE IDS ==='
+            grep -RniE 'name="[^"]*(icon|logo)[^"]*"' decoded/res/values* 2>/dev/null | head -250 || true
+            echo '=== RAW APK ENTRIES THAT MAY BE ICONS ==='
+            python - <<'PY'
+          import zipfile
+          z=zipfile.ZipFile('input/original.apk')
+          for n in z.namelist():
+              if any(k in n.lower() for k in ('icon','launcher','mipmap')):
+                  print(n)
+          PY
+          } > output/icon-resource-map.txt
+          cat output/icon-resource-map.txt
       - name: Upload inspection bundle
         uses: actions/upload-artifact@v4
         with:
