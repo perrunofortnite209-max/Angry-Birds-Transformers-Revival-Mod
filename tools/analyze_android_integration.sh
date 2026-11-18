@@ -59,6 +59,6 @@ REPORT="$OUT/android-integration-report.txt"
   fi
   echo
   echo "=== Safety note ==="
-  echo "Decoded proprietary resources and smali stay in the private runner workspace and are not uploaded."
-  echo "Only text diagnostics and the decoded manifest are uploaded; no APK or game assets are published."
+  echo "Only three selected smali source files are included in the private diagnostics artifact for integration review; all other decoded resources stay in the runner workspace."
+  echo "The private artifact contains text diagnostics, the decoded manifest and the three selected smali files; no APK, textures, audio or other game assets are uploaded."
 } > "$REPORT"
