@@ -1,0 +1,98 @@
+name: Analyze Perfetto Trace
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/analyze-perfetto-trace.yml
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download trace
+        run: |
+          curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/abt.pftrace" -o abt.pftrace
+          test -s abt.pftrace
+          sha256sum abt.pftrace
+
+      - name: Install trace processor client
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install perfetto pandas
+
+      - name: Analyze trace
+        run: |
+          cat > analyze.py <<'PY'
+          from perfetto.trace_processor import TraceProcessor
+          from pathlib import Path
+          import pandas as pd
+
+          out = []
+          def section(title, df):
+              out.append("\\n## " + title + "\\n")
+              if df is None or df.empty:
+                  out.append("(sin datos)\\n")
+              else:
+                  out.append(df.to_string(index=False) + "\\n")
+
+          tp = TraceProcessor(trace="abt.pftrace")
+          try:
+              stats = tp.query("SELECT name, value FROM stats ORDER BY name")
+              section("Trace stats", stats)
+          except Exception as e:
+              out.append("\\nStats no disponibles: " + str(e) + "\\n")
+
+          try:
+              slices = tp.query("""
+                SELECT name, COUNT(*) AS events,
+                       ROUND(SUM(dur)/1e9, 3) AS total_seconds,
+                       ROUND(MAX(dur)/1e6, 3) AS max_ms
+                FROM slice WHERE dur >= 0
+                GROUP BY name ORDER BY SUM(dur) DESC LIMIT 60
+              """)
+              section("Top slices by accumulated duration", slices)
+          except Exception as e:
+              out.append("\\nSlices no disponibles: " + str(e) + "\\n")
+
+          try:
+              sched = tp.query("""
+                SELECT th.name AS thread, COUNT(*) AS slices,
+                       ROUND(SUM(sc.dur)/1e9, 3) AS running_seconds,
+                       ROUND(MAX(sc.dur)/1e6, 3) AS max_run_ms,
+                       GROUP_CONCAT(DISTINCT sc.cpu) AS cpus
+                FROM sched sc JOIN thread th USING(utid)
+                WHERE sc.dur > 0
+                GROUP BY th.name ORDER BY SUM(sc.dur) DESC LIMIT 40
+              """)
+              section("Top scheduled threads", sched)
+          except Exception as e:
+              out.append("\\nSched no disponible: " + str(e) + "\\n")
+
+          try:
+              counters = tp.query("""
+                SELECT t.name AS counter, COUNT(*) AS samples,
+                       ROUND(MIN(c.value), 2) AS min_value,
+                       ROUND(AVG(c.value), 2) AS avg_value,
+                       ROUND(MAX(c.value), 2) AS max_value
+                FROM counter c JOIN counter_track t USING(track_id)
+                GROUP BY t.name ORDER BY t.name LIMIT 100
+              """)
+              section("Counter tracks", counters)
+          except Exception as e:
+              out.append("\\nCounters no disponibles: " + str(e) + "\\n")
+
+          Path("abt-trace-report.md").write_text("# Angry Birds Transformers - Perfetto analysis\\n\\n" + "".join(out))
+          print(Path("abt-trace-report.md").read_text())
+          tp.close()
+          PY
+          python analyze.py
+
+      - name: Upload analysis report
+        uses: actions/upload-artifact@v4
+        with:
+          name: abt-perfetto-analysis
+          path: abt-trace-report.md
+          retention-days: 7
