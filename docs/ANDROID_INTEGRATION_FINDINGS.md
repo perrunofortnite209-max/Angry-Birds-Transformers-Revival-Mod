@@ -40,7 +40,7 @@ These are concrete leads that the game's front-end and settings screens are repr
 
 External format research identifies the game's archives as Exient XGS PAK containers, with known XPK1/XPK2 variants. The QuickBMS `xpk2.bms` script explicitly lists Angry Birds among supported XPK2 targets, and the public ImHex `xgspak.hexpat` pattern documents header, folder table, file metadata, string-table offsets, payload offsets, and compression variants (raw, zlib, LZ4).
 
-This is a research lead, not yet proof that every PAK in this exact APK uses the same variant. The next pass must inspect the actual magic/version/endian/compression fields from the APK's own PAK headers before choosing an extractor. Do not reimport or modify any PAK until extraction and round-trip integrity are demonstrated on a disposable copy.
+The successful private diagnostic run inspected the exact APK and confirmed that sampled `.pak` headers begin with `02 4b 50 58` (`version=2`, `KPX` magic). The header fields decode as little-endian values and the version-2 compression field is `1`, which the XGS pattern defines as zlib. For example, `ui_bundles.pak` reports 4 folders, 27 files and a 703-byte content table; `uienv.pak` reports 2 folders and 2 files; `uisplash.pak` reports 5 folders and 19 files. This is strong evidence that these sampled game archives use the XGS version-2 layout with zlib compression. It does not prove every `.pak` or `.manifest` in the APK shares that layout: the manifest has a different leading version byte and must be treated separately. The diagnostics script now decodes and prints these header fields for each `.pak` on subsequent runs. Do not reimport or modify any PAK until extraction and round-trip integrity are demonstrated on a disposable copy.
 
 Useful public references:
 - QuickBMS XPK2 script listing: https://aluigi.altervista.org/bms/xpk2.bms
@@ -57,11 +57,11 @@ Useful public references:
 
 ## Next investigation
 
-1. Inspect `com.exient.ExientActivity` to determine how the GL surface is created, attached, and layered.
-2. Trace `ExientGLSurfaceView.Renderer` and native frame limiting to identify safe telemetry/control hooks.
-3. Identify a supported native Exient menu extension point for a `MOD SETTINGS` button and its settings screen.
-4. Add a first-launch welcome dialog, persist its dismissal with app-private preferences, and ensure it appears only once.
-5. Only then wire functional FPS settings and any verified graphics parameters.
+1. Implement a read-only XGS v2/zlib extractor against disposable copies of the exact APK's `.pak` files; validate every extracted entry and archive bounds before using any output.
+2. Produce a text-only inventory of `ui_bundles.pak`, `uisplash.pak`, and `uienv.pak` to locate the front-end scene, button resources, atlas and settings-screen definitions.
+3. Trace the native references and event handlers for `CWindow_MainSplashScreen`, `CSettingsScreen` and `ShowSettingsScreen`; identify a real native menu extension point for `MOD SETTINGS`.
+4. Separately validate the native frame-cap patch against the observed 30–32 FPS original behavior and the user's experimental ~72–97 FPS readings; measure frame pacing rather than assuming the cap patch alone solves performance.
+5. Build a private experimental APK only after the patch is verified, then install and test on the Motorola Edge 70 Fusion. Add the one-time welcome notice and settings UI after the native integration point is understood.
 
 ## Safety
 
