@@ -45,12 +45,32 @@ def patch_features(xml):
                                             "onScreen": "true", "displayName": title})
     return ET.tostring(root, encoding="unicode", short_empty_elements=True)
 
+def patch_vfx(xml):
+    root = ET.fromstring(xml)
+    if root.tag != "Configs":
+        raise RuntimeError(f"Raíz VFX inesperada: {root.tag}")
+    matches = [node for node in root.findall("Config") if node.get("ID") == "5"]
+    if len(matches) != 1:
+        raise RuntimeError(f"Se esperaba un Config ID=5; encontrados {len(matches)}")
+    config = matches[0]
+    current = [(node.get("ParticleCount"), node.get("VFX_Limit")) for node in config.findall("Threshold")]
+    expected = [("600", "4"), ("800", "3"), ("900", "2"), ("1000", "1")]
+    if current != expected:
+        raise RuntimeError(f"Umbrales originales inesperados para ID=5: {current}")
+    tuned = [450, 600, 750, 900]
+    for node, count in zip(config.findall("Threshold"), tuned):
+        node.set("ParticleCount", str(count))
+    check = [(node.get("ParticleCount"), node.get("VFX_Limit")) for node in config.findall("Threshold")]
+    if check != [(str(n), str(level)) for n, level in zip(tuned, (4, 3, 2, 1))]:
+        raise RuntimeError(f"Validación de umbrales optimizados falló: {check}")
+    return ET.tostring(root, encoding="unicode", short_empty_elements=True)
+
 def patch_paks(apk, output, root, report, include=("settings", "features")):
     kpx = load_module(root / "tools/xgs_kpx_v2.py", "xgs_kpx_v2")
     codec = load_module(root / "tools/xox2_codec.py", "xox2_codec")
     with zipfile.ZipFile(apk) as zin:
         paks = [n for n in zin.namelist() if n.lower().endswith(".pak")]
-        found = {"settings": [], "features": []}
+        found = {"settings": [], "features": [], "vfx": []}
         for name in paks:
             blob = zin.read(name)
             try: meta = kpx.parse(blob)
@@ -61,11 +81,13 @@ def patch_paks(apk, output, root, report, include=("settings", "features")):
                     found["settings"].append((name, blob, meta, e))
                 if low.endswith("featureconfig.xml") and "uifeatureconfigscreen" not in low:
                     found["features"].append((name, blob, meta, e))
+                if low.endswith("vfxlimitconfig.xml"):
+                    found["vfx"].append((name, blob, meta, e))
         for kind in include:
             if len(found[kind]) != 1:
                 raise RuntimeError(f"Recurso {kind}: se esperaba 1 coincidencia, hay {[(x[0],x[3].name) for x in found[kind]]}")
         replacements = {}
-        for kind, patcher in (("settings", patch_settings), ("features", patch_features)):
+        for kind, patcher in (("settings", patch_settings), ("features", patch_features), ("vfx", patch_vfx)):
             if kind not in include:
                 continue
             pak, blob, meta, entry = found[kind][0]
@@ -78,7 +100,7 @@ def patch_paks(apk, output, root, report, include=("settings", "features")):
             replacements[pak] = rebuilt
             report["resources"].append({"pak": pak, "entry": entry.name,
                 "xox2_roundtrip": True, "kpx_validation": True,
-                "purpose": "visible settings entry" if kind == "settings" else "inert preview toggles"})
+                "purpose": "visible settings entry" if kind == "settings" else "particle-pressure quality thresholds" if kind == "vfx" else "inert preview toggles"})
         with zipfile.ZipFile(output, "w") as zout:
             for info in zin.infolist():
                 zout.writestr(info, replacements.get(info.filename, zin.read(info.filename)))
