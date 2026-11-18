@@ -212,6 +212,45 @@ with zipfile.ZipFile(apk) as z:
                 break
 
 
+# Static mapping established by the DeviceConfig registration and parser:
+# the constructor registers RENDER_SCALE_X/Y at hash slots d410a1c/d410a20;
+# LoadDeviceConfigFile parses those keys into float+present pairs d418c8/d418d0;
+# LoadDeviceSpecific copies those values into DebugFloat[0]/[1].
+lines += ["", "## Confirmed render-scale configuration path",
+          "RENDER_SCALE_X: key-hash slot 0xd410a1c -> parsed float pair 0xd418c8 -> DebugFloat[0] -> CreateVolatileResources width",
+          "RENDER_SCALE_Y: key-hash slot 0xd410a20 -> parsed float pair 0xd418d0 -> DebugFloat[1] -> CreateVolatileResources height",
+          "The parser writes a present flag at pair+0 and float value at pair+4; LoadDeviceSpecific copies the float only when the flag is set."]
+
+# Search every APK archive member, not only files with XML/config extensions, for
+# config keys and performance-profile names. This detects text packed into asset
+# bundles as well as ordinary XML/JSON files.
+with zipfile.ZipFile(apk) as z:
+    lines += ["", "## Whole-APK archive search for config keys and profile names"]
+    archive_needles = (b"RENDER_SCALE_X", b"RENDER_SCALE_Y", b"DEVICE_CONFIG_SCALING",
+                       b"android-generic_low", b"android-generic_medium",
+                       b"android-generic_high", b"android-generic_extrahigh")
+    archive_hits = 0
+    candidate_names = []
+    for info in z.infolist():
+        if info.is_dir():
+            continue
+        lowname = info.filename.lower()
+        if any(k in lowname for k in ("deviceconfig", "device_config", "graphics", "tweak", "config")):
+            candidate_names.append(f"{info.filename} ({info.file_size} bytes)")
+        if info.file_size > 64 * 1024 * 1024:
+            continue
+        try:
+            payload = z.read(info)
+        except Exception:
+            continue
+        hits = [n.decode("ascii") for n in archive_needles if n in payload]
+        if hits:
+            lines.append(f"{info.filename}: hits={','.join(hits)}")
+            archive_hits += 1
+    lines.append(f"Archive members with key/profile string matches: {archive_hits}")
+    lines.append("Config-named archive members:")
+    lines.extend(candidate_names[:250] if candidate_names else ["<none>"])
+
 # Find all direct call sites of the float-setting accessor used with enum
 # indices 0 and 1 by CreateVolatileResources, then dump its implementation.
 lines += ["", "## Debug float table initialization and configuration copy routines"]
@@ -227,8 +266,9 @@ for ins in insns:
 # Trace the actual source fields copied into float-setting indices 0, 1 and 2
 # by CDebugManager::LoadDeviceSpecific. Each source is a flag + float pair.
 lines += ["", "## Device-specific source fields for render-scale float indices"]
-source_fields = {0xd4108c8: "float setting index 0", 0xd4108d0: "float setting index 1",
-                 0xd4108d8: "float setting index 2"}
+source_fields = {0xd418c8: "float setting index 0 / RENDER_SCALE_X",
+                 0xd418d0: "float setting index 1 / RENDER_SCALE_Y",
+                 0xd418d8: "float setting index 2 / SizeScaleDown"}
 for i, ins in enumerate(insns):
     if ins.mnemonic != "adrp" or len(ins.operands) < 2:
         continue
