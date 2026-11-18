@@ -56,7 +56,7 @@ jobs:
           git clone https://github.com/omonkeyz/angry-birds-go-rust.git "$RUNNER_TEMP/abgtool"
           git -C "$RUNNER_TEMP/abgtool" checkout 7cd02d36d42b58b652fdc98848de08221d1a0469
           cargo build --release --manifest-path "$RUNNER_TEMP/abgtool/abgtool/Cargo.toml"
-          echo "ABGTOOL=$RUNNER_TEMP/abgtool/target/release/abgtool" >> "$GITHUB_ENV"
+          echo "ABGTOOL=$RUNNER_TEMP/abgtool/abgtool/target/release/abgtool" >> "$GITHUB_ENV"
       - name: Find the settings PAK and validate no-op archive rebuild
         run: |
           set -euo pipefail
