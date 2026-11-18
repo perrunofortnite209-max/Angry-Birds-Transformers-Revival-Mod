@@ -7,7 +7,6 @@ on:
       - ".github/workflows/build-pak-only-diagnostic.yml"
       - "tools/build_pak_only_diagnostic.py"
       - "tools/build_visual_test_apk.py"
-      - "tools/build_pak_only_diagnostic.py"
       - "tools/xgs_kpx_v2.py"
       - "tools/xox2_codec.py"
   workflow_dispatch:
@@ -63,7 +62,7 @@ jobs:
         with:
           name: abt-vfx-optimized
           path: |
-            output/ABT-PAK-ONLY-DIAGNOSTIC.apk
+            output/ABT-VFX-OPTIMIZED.apk
             output/ABT-VFX-OPTIMIZED.report.json
           if-no-files-found: error
           retention-days: 14
