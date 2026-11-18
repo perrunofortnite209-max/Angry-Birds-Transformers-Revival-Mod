@@ -255,6 +255,68 @@ jobs:
               out.append("\\nPer-frame scheduler correlation unavailable: " + str(e) + "\\n")
 
           try:
+              blocked = run("""
+                SELECT st.state,
+                       COALESCE(st.blocked_function, '(sin blocked_function)') AS blocked_function,
+                       COALESCE(CAST(st.io_wait AS TEXT), '(sin dato)') AS io_wait,
+                       COUNT(*) AS intervals,
+                       ROUND(SUM(st.dur)/1e9, 4) AS total_seconds,
+                       ROUND(MAX(st.dur)/1e6, 3) AS max_interval_ms
+                FROM thread_state st
+                JOIN thread_track tt ON tt.utid = st.utid
+                JOIN slice fr ON fr.track_id = tt.id
+                WHERE fr.name = 'onDrawFrame'
+                  AND fr.dur > 16666667
+                  AND st.ts < fr.ts + fr.dur
+                  AND st.ts + st.dur > fr.ts
+                  AND st.state IN ('S', 'D')
+                GROUP BY st.state, blocked_function, io_wait
+                ORDER BY SUM(st.dur) DESC
+                LIMIT 100
+              """)
+              section("Blocked/sleep details overlapping slow GL frames", blocked)
+          except Exception as e:
+              out.append("\\nBlocked details unavailable: " + str(e) + "\\n")
+
+          try:
+              gl_sleep = run("""
+                SELECT ROUND(fr.dur/1e6, 2) AS frame_ms,
+                       fr.ts AS frame_ts,
+                       st.state,
+                       ROUND(MAX(0, MIN(st.ts + st.dur, fr.ts + fr.dur) -
+                                      MAX(st.ts, fr.ts))/1e6, 3) AS overlap_ms,
+                       st.blocked_function,
+                       st.io_wait
+                FROM slice fr
+                JOIN thread_track tt ON tt.id = fr.track_id
+                JOIN thread_state st ON st.utid = tt.utid
+                  AND st.ts < fr.ts + fr.dur
+                  AND st.ts + st.dur > fr.ts
+                WHERE fr.name = 'onDrawFrame'
+                  AND fr.dur > 16666667
+                  AND st.state IN ('S', 'D')
+                ORDER BY fr.dur DESC, overlap_ms DESC
+                LIMIT 250
+              """)
+              section("Individual sleeping/blocked intervals in slow frames", gl_sleep)
+          except Exception as e:
+              out.append("\\nIndividual blocked intervals unavailable: " + str(e) + "\\n")
+
+          try:
+              schema = run("""
+                SELECT name, sql
+                FROM sqlite_master
+                WHERE type = 'table'
+                  AND (name LIKE '%sched%' OR name LIKE '%fence%'
+                       OR name LIKE '%binder%' OR name LIKE '%gpu%'
+                       OR name LIKE '%sync%')
+                ORDER BY name
+              """)
+              section("Available scheduler/sync/GPU trace tables", schema)
+          except Exception as e:
+              out.append("\\nTrace table inventory unavailable: " + str(e) + "\\n")
+
+          try:
               sched_overlap = run("""
                 WITH slow AS (
                   SELECT id, ts, dur, track_id
