@@ -1,0 +1,52 @@
+name: XOX2 interoperability check
+
+on:
+  push:
+    branches: [feature/full-revival-mod]
+    paths:
+      - ".github/workflows/xox2-interoperability.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  abgtool-cross-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run local codec tests
+        run: |
+          python -m py_compile tools/xox2_codec.py
+          python tools/xox2_codec.py --self-test
+      - name: Create an XOX2 sample
+        run: |
+          python - <<'PY'
+          import runpy
+          from pathlib import Path
+          codec = runpy.run_path("tools/xox2_codec.py")
+          source = '<?xml version="1.0" encoding="UTF-8"?>\n<Settings><Button id="RateGameButton" title="Calificar juego"/><Label value="áé 日本語"/></Settings>'
+          Path("/tmp/xox2-source.xml").write_text(source, encoding="utf-8")
+          Path("/tmp/xox2-sample.xml").write_bytes(codec["encode"](source))
+          PY
+      - name: Build pinned independent XOX2 decoder
+        run: |
+          git clone https://github.com/omonkeyz/angry-birds-go-rust.git /tmp/abgtool
+          git -C /tmp/abgtool checkout 7cd02d36d42b58b652fdc98848de08221d1a0469
+          cargo build --release --manifest-path /tmp/abgtool/abgtool/Cargo.toml
+      - name: Decode with independent abgtool and compare
+        run: |
+          /tmp/abgtool/target/release/abgtool xox /tmp/xox2-sample.xml > /tmp/xox2-decoded.xml
+          python - <<'PY'
+          from pathlib import Path
+          source = Path("/tmp/xox2-source.xml").read_bytes()
+          decoded = Path("/tmp/xox2-decoded.xml").read_bytes()
+          if decoded.endswith(b"\n"):
+              decoded = decoded[:-1]
+          if decoded != source:
+              raise SystemExit("Independent abgtool decode differs from source XML")
+          print("OK: independently decoded XOX2 matches the original XML")
+          PY
