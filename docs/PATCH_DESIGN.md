@@ -14,9 +14,11 @@ Obtener de Android los modos de refresco que realmente anuncia la pantalla. No a
 
 Traducir la elección del usuario a un objetivo compatible con el motor. El controlador debe distinguir entre tasa solicitada, tasa permitida por el motor y tasa observada.
 
-### 3. Panel de ajustes
+### 3. Ajustes dentro del menú original
 
-Interfaz pequeña superpuesta al juego, con cierre rápido, controles accesibles y restauración de valores predeterminados. Debe evitar interceptar controles esenciales del juego cuando esté cerrado.
+Añadir la entrada **MOD SETTINGS** a la pantalla nativa `CSettingsScreen`, sin panel flotante ni ventana externa. La opción debe convivir con privacidad, borrado de datos, asistencia, restauración de compras, inicio de sesión, sonido y valoración. No se deben reemplazar ni alterar esos controles.
+
+La pantalla original ya declara enlaces para `Page1`/`Page2`, controles de sonido, ahorro de energía, restauración, asistencia y valoración. La integración debe respetar esa estructura y abrir una página propia del mod mediante una acción que el motor realmente reconozca.
 
 ### 4. Preferencias
 
@@ -32,8 +34,8 @@ Mostrar FPS y estado de modo solo para diagnóstico. No enviar datos del disposi
 2. Crear un prototipo de cambio de tasa sin interfaz.
 3. Validarlo con escenas repetibles.
 4. Añadir detección de modos de pantalla.
-5. Añadir el panel flotante.
-6. Añadir bienvenida y preferencias.
+5. Integrar MOD SETTINGS en CSettingsScreen y validar su acción de navegación.
+6. Añadir bienvenida de primer inicio y preferencias persistentes.
 7. Probar opciones gráficas una por una.
 
 ## Compatibilidad
