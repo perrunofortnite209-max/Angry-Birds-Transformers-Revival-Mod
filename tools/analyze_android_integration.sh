@@ -63,7 +63,7 @@ REPORT="$OUT/android-integration-report.txt"
   done
   echo
   echo "=== Engine activity and GL renderer integration references ==="
-  find "$DECODE" -type f \\( -name 'ExientActivity.smali' -o -name 'ExientGLSurfaceView$Renderer.smali' \\) -print0 |
+  find "$DECODE" -type f \( -name 'ExientActivity.smali' -o -name 'ExientGLSurfaceView$Renderer.smali' \) -print0 |
     xargs -0 grep -nE '^\\.method|onCreate|onResume|onPause|setContentView|addContentView|addView|ExientGLSurfaceView|setRenderer|onDrawFrame|eglSwapBuffers|setFrameRate|LimitFPS|GetDesiredFramerate' 2>/dev/null |
     head -n 300 || true
   echo
