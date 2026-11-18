@@ -1,0 +1,100 @@
+name: XOX2 real game asset round-trip
+
+on:
+  push:
+    branches: [feature/full-revival-mod]
+    paths:
+      - ".github/workflows/xox2-real-asset-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-asset-round-trip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out project tools
+        uses: actions/checkout@v4
+        with:
+          ref: feature/full-revival-mod
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install extractor dependency
+        run: python -m pip install lz4
+      - name: Download original APK into private runner workspace
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/private-input"
+          gh release download game --repo "$GITHUB_REPOSITORY" --pattern "*.apk" --dir "$RUNNER_TEMP/private-input"
+          mapfile -t APKS < <(find "$RUNNER_TEMP/private-input" -maxdepth 1 -type f -name '*.apk')
+          test "${#APKS[@]}" -eq 1
+          echo "APK_FILE=${APKS[0]}" >> "$GITHUB_ENV"
+          echo "${APKS[0]}"
+      - name: Verify original APK fingerprint
+        run: |
+          set -euo pipefail
+          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  $APK_FILE" | sha256sum -c -
+      - name: Extract XGS PAK assets read-only
+        run: |
+          set -euo pipefail
+          python tools/extract_xgs_pak.py "$APK_FILE" --all-paks --out "$RUNNER_TEMP/xgs-assets" --report "$RUNNER_TEMP/pak-inventory.txt"
+          mapfile -t SETTINGS < <(find "$RUNNER_TEMP/xgs-assets" -type f -iname 'uisettingsscreen.xml' -print)
+          if [[ "${#SETTINGS[@]}" -ne 1 ]]; then
+            echo "Expected exactly one uisettingsscreen.xml; found ${#SETTINGS[@]}" >&2
+            find "$RUNNER_TEMP/xgs-assets" -type f | grep -i 'settings' | head -n 100 || true
+            exit 1
+          fi
+          echo "SETTINGS_XOX=${SETTINGS[0]}" >> "$GITHUB_ENV"
+      - name: Build independent XOX2 decoder
+        run: |
+          set -euo pipefail
+          git clone https://github.com/omonkeyz/angry-birds-go-rust.git "$RUNNER_TEMP/abgtool"
+          git -C "$RUNNER_TEMP/abgtool" checkout 7cd02d36d42b58b652fdc98848de08221d1a0469
+          cargo build --release --manifest-path "$RUNNER_TEMP/abgtool/abgtool/Cargo.toml"
+          echo "ABGTOOL_MANIFEST=$RUNNER_TEMP/abgtool/abgtool/Cargo.toml" >> "$GITHUB_ENV"
+      - name: Decode real asset, encode it, and cross-decode
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/xox2-check"
+          cargo run --quiet --release --manifest-path "$ABGTOOL_MANIFEST" -- xox "$SETTINGS_XOX" > "$RUNNER_TEMP/xox2-check/settings.original.xml"
+          python - "$RUNNER_TEMP/xox2-check/settings.original.xml" "$RUNNER_TEMP/xox2-check/settings.rebuilt.xox2" <<'PY'
+          import sys
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          source = Path(sys.argv[1]).read_text(encoding='utf-8')
+          root = ET.fromstring(source)
+          print(f"Original XML parsed: {len(list(root.iter()))} nodes; root={root.tag}")
+          Path(sys.argv[2]).parent.mkdir(parents=True, exist_ok=True)
+          PY
+          python tools/xox2_codec.py "$RUNNER_TEMP/xox2-check/settings.original.xml" "$RUNNER_TEMP/xox2-check/settings.rebuilt.xox2"
+          cargo run --quiet --release --manifest-path "$ABGTOOL_MANIFEST" -- xox "$RUNNER_TEMP/xox2-check/settings.rebuilt.xox2" > "$RUNNER_TEMP/xox2-check/settings.rebuilt.xml"
+          cmp "$RUNNER_TEMP/xox2-check/settings.original.xml" "$RUNNER_TEMP/xox2-check/settings.rebuilt.xml"
+          python - "$SETTINGS_XOX" "$RUNNER_TEMP/xox2-check/settings.rebuilt.xox2" "$RUNNER_TEMP/xox2-check/result.txt" <<'PY'
+          import hashlib, sys
+          from pathlib import Path
+          original, rebuilt, report = map(Path, sys.argv[1:])
+          lines = [
+              "RESULT=PASS",
+              f"original_xox2_bytes={original.stat().st_size}",
+              f"rebuilt_xox2_bytes={rebuilt.stat().st_size}",
+              f"original_xox2_sha256={hashlib.sha256(original.read_bytes()).hexdigest()}",
+              f"rebuilt_xox2_sha256={hashlib.sha256(rebuilt.read_bytes()).hexdigest()}",
+              "independent_abgtool_decode=PASS",
+              "xml_byte_for_byte_match=PASS",
+          ]
+          report.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("\n".join(lines))
+          PY
+      - name: Upload text-only validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: xox2-real-asset-validation
+          path: "$RUNNER_TEMP/xox2-check/result.txt"
+          if-no-files-found: error
+          retention-days: 7
