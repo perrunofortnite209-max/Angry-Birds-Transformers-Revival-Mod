@@ -22,15 +22,15 @@ if ($ready.Count -lt 1) {
     throw "No hay un dispositivo ADB autorizado. Conecta el teléfono y acepta la depuración USB."
 }
 
-$pid = (& adb shell pidof $Package 2>$null | Out-String).Trim()
-if (-not $pid) {
+$gamePid = (& adb shell pidof $Package 2>$null | Out-String).Trim()
+if (-not $gamePid) {
     throw "No encuentro el proceso $Package. Abre el juego y vuelve a ejecutar el script."
 }
 
 $remote = "/data/misc/perfetto-traces/xgs-perfetto.pftrace"
 $local = Join-Path (Get-Location) ("xgs-perfetto-{0}.pftrace" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
 
-Write-Host "Dispositivo conectado. Proceso del juego: $pid"
+Write-Host "Dispositivo conectado. Proceso del juego: $gamePid"
 Write-Host "Iniciando captura Perfetto durante $DurationSeconds segundos."
 Write-Host "Durante la captura, juega una partida normal y reproduce las bajadas de FPS."
 Write-Host "No cambies los ajustes gráficos ni el límite de FPS durante esta prueba."
