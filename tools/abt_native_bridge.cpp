@@ -37,24 +37,22 @@ static int current_graphics(uintptr_t base) {
 }
 static int set_graphics(uintptr_t base, int target) {
     if (target < 0 || target > 3) return -1;
-    // ChangePerformance() treats m_eCurrentPerformance as a sentinel-based
-    // enum and applies its own +/- bounds. Calling it with a direction from
-    // the raw value can reject a perfectly valid direct profile selection.
-    // Seed the requested enum, then invoke the game's native "step down"
-    // path: its internal (current + 1) - 1 resolves back to exactly target.
-    // This still performs the real XML load, resets FPS profiling, updates
-    // the player preference and requests a save through the game's code.
-    using ChangePerformance = int (*)(int);
-    auto change = reinterpret_cast<ChangePerformance>(base + 0x6ed4b8);
-    auto current = reinterpret_cast<volatile int *>(base + 0xcf9908); // CDeviceConfig::m_eCurrentPerformance
-    const int previous = *current;
+
+    // Use the engine's direct profile loader instead of editing its internal
+    // current-profile field and simulating a ChangePerformance() step.
+    // Disassembly confirms LoadDeviceConfigByPerformance(enum) indexes the
+    // native profile table at 0xcb07c0, loads the matching deviceconfig XML,
+    // and updates m_eCurrentPerformance only after the load succeeds.
+    using LoadByPerformance = int (*)(int);
+    auto load = reinterpret_cast<LoadByPerformance>(base + 0x6ed26c);
+
+    const int previous = current_graphics(base);
     if (previous == target) return target + 1;
-    *current = target;
-    const int applied = change(-1);
+
+    const int loaded = load(target);
     const int updated = current_graphics(base);
-    if (applied && updated == target) return updated + 1;
-    *current = previous;
-    return applied ? -3 : -2;
+    if (loaded && updated == target) return updated + 1;
+    return loaded ? -3 : -2;
 }
 
 } // namespace
