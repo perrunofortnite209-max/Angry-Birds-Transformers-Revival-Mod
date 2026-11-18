@@ -230,12 +230,16 @@ def patch_welcome(decoded, report):
     mul-float v7, v7, v6
     float-to-int v7, v7
     iput v7, v0, Landroid/widget/FrameLayout$LayoutParams;->rightMargin:I
-    new-instance v1, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallClickListener;
-    invoke-direct {v1, p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallClickListener;-><init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;)V
-    invoke-virtual {v5, v1}, Landroid/view/View;->setOnClickListener(Landroid/view/View$OnClickListener;)V
-    const-string v1, "abt_revival_ball"
-    invoke-virtual {v4, v1}, Landroid/view/View;->setTag(Ljava/lang/Object;)V
+    const-string v1, "abt_revival_ball_view"
+    invoke-virtual {v5, v1}, Landroid/view/View;->setTag(Ljava/lang/Object;)V
+    new-instance v1, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallHideTask;
+    invoke-direct {v1, v5}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallHideTask;-><init>(Landroid/view/View;)V
+    new-instance v2, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;
+    invoke-direct {v2, p0, v1}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;-><init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;Ljava/lang/Runnable;)V
+    invoke-virtual {v5, v2}, Landroid/view/View;->setOnTouchListener(Landroid/view/View$OnTouchListener;)V
     invoke-virtual {v4, v5, v0}, Landroid/view/ViewGroup;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V
+    const-wide/16 v2, 0x7530
+    invoke-virtual {v5, v1, v2, v3}, Landroid/view/View;->postDelayed(Ljava/lang/Runnable;J)Z
     :ball_done
     return-void
 .end method
@@ -272,8 +276,191 @@ def patch_welcome(decoded, report):
     return-void
 .end method
 """.lstrip(),encoding="utf-8")
+    settings_helper=r"""
+.method public showRevivalSettings()V
+    .locals 8
+    const-string v0, "abt_revival_mod"
+    const/4 v1, 0x0
+    invoke-virtual {p0, v0, v1}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
+    move-result-object v4
+    const/4 v1, 0x2
+    new-array v2, v1, [Ljava/lang/CharSequence;
+    const-string v3, "Ocultar automáticamente después de 30 segundos"
+    const/4 v5, 0x0
+    aput-object v3, v2, v5
+    const-string v3, "Vibración al tocar la bolita"
+    const/4 v5, 0x1
+    aput-object v3, v2, v5
+    new-array v3, v1, [Z
+    const-string v5, "auto_hide"
+    const/4 v6, 0x1
+    invoke-interface {v4, v5, v6}, Landroid/content/SharedPreferences;->getBoolean(Ljava/lang/String;Z)Z
+    move-result v5
+    const/4 v7, 0x0
+    aput-boolean v5, v3, v7
+    const-string v5, "ball_haptics"
+    invoke-interface {v4, v5, v7}, Landroid/content/SharedPreferences;->getBoolean(Ljava/lang/String;Z)Z
+    move-result v5
+    const/4 v7, 0x1
+    aput-boolean v5, v3, v7
+    new-instance v5, Landroid/app/AlertDialog$Builder;
+    invoke-direct {v5, p0}, Landroid/app/AlertDialog$Builder;-><init>(Landroid/content/Context;)V
+    const-string v6, "MOD SETTINGS"
+    invoke-virtual {v5, v6}, Landroid/app/AlertDialog$Builder;->setTitle(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
+    new-instance v6, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalSettingsListener;
+    invoke-direct {v6, p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalSettingsListener;-><init>(Landroid/content/Context;)V
+    invoke-virtual {v5, v2, v3, v6}, Landroid/app/AlertDialog$Builder;->setMultiChoiceItems([Ljava/lang/CharSequence;[ZLandroid/content/DialogInterface$OnMultiChoiceClickListener;)Landroid/app/AlertDialog$Builder;
+    move-result-object v5
+    const-string v6, "FPS objetivo del motor: 144 (activo)"
+    invoke-virtual {v5, v6}, Landroid/app/AlertDialog$Builder;->setMessage(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
+    move-result-object v5
+    const-string v6, "CERRAR"
+    const/4 v7, 0x0
+    invoke-virtual {v5, v6, v7}, Landroid/app/AlertDialog$Builder;->setPositiveButton(Ljava/lang/CharSequence;Landroid/content/DialogInterface$OnClickListener;)Landroid/app/AlertDialog$Builder;
+    move-result-object v5
+    invoke-virtual {v5}, Landroid/app/AlertDialog$Builder;->show()Landroid/app/AlertDialog;
+    return-void
+.end method
+"""
+    path.write_text(source+"\n"+helper+"\n"+floating_helper+"\n"+settings_helper,encoding="utf-8")
+    base=path.parent.parent/"smali/com/rovio/angrybirdstransformers"
+    base.mkdir(parents=True,exist_ok=True)
+    files={
+    "AngryBirdsTransformersActivity$RevivalBallTouchListener.smali":r""".class public final Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;
+.super Ljava/lang/Object;
+.implements Landroid/view/View$OnTouchListener;
+.field private final activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+.field private final hideTask:Ljava/lang/Runnable;
+.field private downX:F
+.field private downY:F
+.field private startX:F
+.field private startY:F
+.field private moved:Z
+.method public constructor <init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;Ljava/lang/Runnable;)V
+ .locals 0
+ invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+ iput-object p1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+ iput-object p2, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->hideTask:Ljava/lang/Runnable;
+ return-void
+.end method
+.method public onTouch(Landroid/view/View;Landroid/view/MotionEvent;)Z
+ .locals 7
+ invoke-virtual {p2}, Landroid/view/MotionEvent;->getActionMasked()I
+ move-result v0
+ if-nez v0, :touch_move
+ invoke-virtual {p2}, Landroid/view/MotionEvent;->getRawX()F
+ move-result v1
+ iput v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->downX:F
+ invoke-virtual {p2}, Landroid/view/MotionEvent;->getRawY()F
+ move-result v1
+ iput v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->downY:F
+ invoke-virtual {p1}, Landroid/view/View;->getX()F
+ move-result v1
+ iput v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->startX:F
+ invoke-virtual {p1}, Landroid/view/View;->getY()F
+ move-result v1
+ iput v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->startY:F
+ const/4 v1, 0x0
+ iput-boolean v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->moved:Z
+ iget-object v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->hideTask:Ljava/lang/Runnable;
+ invoke-virtual {p1, v1}, Landroid/view/View;->removeCallbacks(Ljava/lang/Runnable;)Z
+ const/4 v1, 0x1
+ return v1
+ :touch_move
+ const/4 v1, 0x2
+ if-ne v0, v1, :touch_up
+ invoke-virtual {p2}, Landroid/view/MotionEvent;->getRawX()F
+ move-result v1
+ iget v2, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->downX:F
+ sub-float v3, v1, v2
+ invoke-virtual {p2}, Landroid/view/MotionEvent;->getRawY()F
+ move-result v1
+ iget v2, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->downY:F
+ sub-float v4, v1, v2
+ const/4 v1, 0x1
+ iput-boolean v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->moved:Z
+ iget v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->startX:F
+ add-float/2addr v1, v3
+ invoke-virtual {p1, v1}, Landroid/view/View;->setX(F)V
+ iget v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->startY:F
+ add-float/2addr v1, v4
+ invoke-virtual {p1, v1}, Landroid/view/View;->setY(F)V
+ const/4 v1, 0x1
+ return v1
+ :touch_up
+ const/4 v1, 0x1
+ if-ne v0, v1, :touch_other
+ iget-boolean v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->moved:Z
+ if-nez v1, :touch_schedule
+ iget-object v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+ invoke-virtual {v1}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->showRevivalSettings()V
+ :touch_schedule
+ iget-object v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->hideTask:Ljava/lang/Runnable;
+ const-wide/16 v2, 0x7530
+ invoke-virtual {p1, v1, v2, v3}, Landroid/view/View;->postDelayed(Ljava/lang/Runnable;J)Z
+ const/4 v1, 0x1
+ return v1
+ :touch_other
+ const/4 v1, 0x1
+ return v1
+.end method
+""",
+    "AngryBirdsTransformersActivity$RevivalBallHideTask.smali":r""".class public final Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallHideTask;
+.super Ljava/lang/Object;
+.implements Ljava/lang/Runnable;
+.field private final ball:Landroid/view/View;
+.method public constructor <init>(Landroid/view/View;)V
+ .locals 0
+ invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+ iput-object p1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallHideTask;->ball:Landroid/view/View;
+ return-void
+.end method
+.method public run()V
+ .locals 2
+ iget-object v0, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallHideTask;->ball:Landroid/view/View;
+ const/16 v1, 0x8
+ invoke-virtual {v0, v1}, Landroid/view/View;->setVisibility(I)V
+ return-void
+.end method
+""",
+    "AngryBirdsTransformersActivity$RevivalSettingsListener.smali":r""".class public final Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalSettingsListener;
+.super Ljava/lang/Object;
+.implements Landroid/content/DialogInterface$OnMultiChoiceClickListener;
+.field private final context:Landroid/content/Context;
+.method public constructor <init>(Landroid/content/Context;)V
+ .locals 0
+ invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+ iput-object p1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalSettingsListener;->context:Landroid/content/Context;
+ return-void
+.end method
+.method public onClick(Landroid/content/DialogInterface;IZ)V
+ .locals 4
+ iget-object v0, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalSettingsListener;->context:Landroid/content/Context;
+ const-string v1, "abt_revival_mod"
+ const/4 v2, 0x0
+ invoke-virtual {v0, v1, v2}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
+ move-result-object v0
+ invoke-interface {v0}, Landroid/content/SharedPreferences;->edit()Landroid/content/SharedPreferences$Editor;
+ move-result-object v0
+ if-nez p2, :setting_haptics
+ const-string v1, "auto_hide"
+ invoke-interface {v0, v1, p3}, Landroid/content/SharedPreferences$Editor;->putBoolean(Ljava/lang/String;Z)Landroid/content/SharedPreferences$Editor;
+ move-result-object v0
+ goto :setting_save
+ :setting_haptics
+ const-string v1, "ball_haptics"
+ invoke-interface {v0, v1, p3}, Landroid/content/SharedPreferences$Editor;->putBoolean(Ljava/lang/String;Z)Landroid/content/SharedPreferences$Editor;
+ move-result-object v0
+ :setting_save
+ invoke-interface {v0}, Landroid/content/SharedPreferences$Editor;->apply()V
+ return-void
+.end method
+"""
+    }
+    for name,content in files.items():
+        (base/name).write_text(content.lstrip(),encoding="utf-8")
     report["welcome"]={"first_launch_only":True,"dismissible":True,"method":"Android AlertDialog + SharedPreferences"}
-    report["floating_ball"]={"enabled_after_first_app_session":True,"overlay_permission":False,"opens":"MOD SETTINGS dialog","pak_modified":False}
+    report["floating_ball"]={"draggable":True,"auto_hide_seconds":30,"overlay_permission":False,"settings":["auto_hide","ball_haptics"],"pak_modified":False}
 
 def main():
     ap=argparse.ArgumentParser()
