@@ -100,8 +100,8 @@ for i, ins in enumerate(insns):
 # Also list every instruction that addresses the GOT/data pages holding the
 # relocation slots. The earlier narrow scan only matched a single ADRP+memory
 # pair and could miss compiler-generated address materialization sequences.
-lines += ["", "## Broad code references to relocation/GOT pages"]
-interesting_pages = {0xcee000, 0xcef000, 0xd41000, 0xd418000, 0x117000}
+lines += ["", "## Broad code references to relocation/GOT pages and CDebugManager float table (0xf4f540)"]
+interesting_pages = {0xcee000, 0xcef000, 0xd41000, 0xd418000, 0x117000, 0xf4f000}
 for i, ins in enumerate(insns):
     if ins.mnemonic != "adrp" or len(ins.operands) < 2:
         continue
