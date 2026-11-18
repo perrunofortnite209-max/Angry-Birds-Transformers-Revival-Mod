@@ -343,4 +343,4 @@ def patch(decoded: Path, report: dict):
  return-void
 .end method
 """.strip()+"\n",encoding="utf-8")
-    report["runtime_controls"]={"fps_options":[30,60,90,120,140,"unlimited"],"graphics_profiles":["android-generic_low","android-generic_medium","android-generic_high","android-generic_extrahigh"],"graphics_switch":"CDeviceConfig::ChangePerformance","jni_bridge":True}
+    report["runtime_controls"]={"fps_options":[30,60,90,120,140,"unlimited"],"graphics_profiles":["android-generic_low","android-generic_medium","android-generic_high","android-generic_extrahigh"],"graphics_switch":"LoadDeviceConfigByPerformance + renderer refresh","jni_bridge":True,"runtime_abi":"arm64"}
