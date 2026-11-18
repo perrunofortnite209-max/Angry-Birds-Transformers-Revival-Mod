@@ -12,11 +12,14 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     steps:
-      - name: Download trace
+      - name: Download latest explosion trace
         run: |
-          curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/abt.pftrace" -o abt.pftrace
+          curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/abt-explosion-trace.pftrace" -o abt.pftrace
           test -s abt.pftrace
+          echo "Trace SHA256:"
           sha256sum abt.pftrace
+          echo "Trace size:"
+          stat -c '%s bytes' abt.pftrace
 
       - name: Install trace processor client
         run: |
@@ -28,7 +31,6 @@ jobs:
           cat > analyze.py <<'PY'
           from perfetto.trace_processor import TraceProcessor
           from pathlib import Path
-          import pandas as pd
 
           out = []
           def run(sql):
@@ -42,307 +44,31 @@ jobs:
                   out.append(df.to_string(index=False) + "\\n")
 
           tp = TraceProcessor(trace="abt.pftrace")
-          try:
-              stats = run("SELECT name, value FROM stats ORDER BY name")
-              section("Trace stats", stats)
-          except Exception as e:
-              out.append("\\nStats no disponibles: " + str(e) + "\\n")
+          queries = [
+            ("Trace stats", "SELECT name, value FROM stats ORDER BY name"),
+            ("Trace duration", "SELECT ROUND((MAX(ts+dur)-MIN(ts))/1e9,2) AS span_seconds, COUNT(*) AS slices FROM slice WHERE dur>0"),
+            ("Game draw-frame timing", """SELECT COUNT(*) AS frames, ROUND(AVG(dur)/1e6,2) AS avg_ms, ROUND(MAX(dur)/1e6,2) AS max_ms, SUM(CASE WHEN dur>16666667 THEN 1 ELSE 0 END) AS over_16_7ms, SUM(CASE WHEN dur>33333333 THEN 1 ELSE 0 END) AS over_33_3ms, SUM(CASE WHEN dur>50000000 THEN 1 ELSE 0 END) AS over_50ms FROM slice WHERE name='onDrawFrame' AND dur>0"""),
+            ("20 slowest game frames", """SELECT ROUND(dur/1e6,2) AS frame_ms, ts, id, track_id FROM slice WHERE name='onDrawFrame' AND dur>0 ORDER BY dur DESC LIMIT 20"""),
+            ("GLThread scheduler states", """SELECT th.name AS thread, st.state, COUNT(*) AS intervals, ROUND(SUM(st.dur)/1e9,3) AS seconds, ROUND(MAX(st.dur)/1e6,3) AS max_ms, GROUP_CONCAT(DISTINCT st.blocked_function) AS blocked_functions FROM thread_state st JOIN thread th USING(utid) WHERE th.name LIKE 'GLThread%' GROUP BY th.name,st.state ORDER BY SUM(st.dur) DESC"""),
+            ("CPU running overlap in slow frames", """WITH slow AS (SELECT id,ts,dur,track_id FROM slice WHERE name='onDrawFrame' AND dur>16666667) SELECT ROUND(p.dur/1e6,2) AS frame_ms,p.ts,ROUND(SUM(MAX(0,MIN(sc.ts+sc.dur,p.ts+p.dur)-MAX(sc.ts,p.ts)))/1e6,3) AS running_ms,COUNT(sc.ts) AS sched_intervals,GROUP_CONCAT(DISTINCT sc.cpu) AS cpus FROM slow p JOIN thread_track tt ON tt.id=p.track_id LEFT JOIN sched sc ON sc.utid=tt.utid AND sc.ts<p.ts+p.dur AND sc.ts+sc.dur>p.ts GROUP BY p.id ORDER BY p.dur DESC LIMIT 60"""),
+            ("Scheduler states overlapping slow frames", """WITH slow AS (SELECT id,ts,dur,track_id FROM slice WHERE name='onDrawFrame' AND dur>16666667) SELECT ROUND(p.dur/1e6,2) AS frame_ms,p.ts,st.state,COUNT(*) AS intervals,ROUND(SUM(MAX(0,MIN(st.ts+st.dur,p.ts+p.dur)-MAX(st.ts,p.ts)))/1e6,3) AS overlap_ms,GROUP_CONCAT(DISTINCT st.blocked_function) AS blocked FROM slow p JOIN thread_track tt ON tt.id=p.track_id JOIN thread_state st ON st.utid=tt.utid AND st.ts<p.ts+p.dur AND st.ts+st.dur>p.ts GROUP BY p.id,st.state ORDER BY p.dur DESC,overlap_ms DESC"""),
+            ("Top slices", """SELECT name,COUNT(*) AS events,ROUND(SUM(dur)/1e9,3) AS total_seconds,ROUND(MAX(dur)/1e6,3) AS max_ms FROM slice WHERE dur>=0 GROUP BY name ORDER BY SUM(dur) DESC LIMIT 80"""),
+            ("Chromium/WebView/GPU/ANGLE/Viz slices", """SELECT name,COUNT(*) AS events,ROUND(SUM(dur)/1e9,3) AS total_seconds,ROUND(MAX(dur)/1e6,3) AS max_ms FROM slice WHERE dur>=0 AND (LOWER(name) LIKE '%gpu%' OR LOWER(name) LIKE '%angle%' OR LOWER(name) LIKE '%viz%' OR LOWER(name) LIKE '%compositor%' OR LOWER(name) LIKE '%webview%' OR LOWER(name) LIKE '%chromium%' OR LOWER(name) LIKE '%egl%' OR LOWER(name) LIKE '%fence%' OR LOWER(name) LIKE '%swap%') GROUP BY name ORDER BY SUM(dur) DESC LIMIT 120"""),
+            ("Explosion/particle/physics slices", """SELECT name,COUNT(*) AS events,ROUND(SUM(dur)/1e9,3) AS total_seconds,ROUND(MAX(dur)/1e6,3) AS max_ms FROM slice WHERE dur>=0 AND (LOWER(name) LIKE '%explos%' OR LOWER(name) LIKE '%particle%' OR LOWER(name) LIKE '%effect%' OR LOWER(name) LIKE '%damage%' OR LOWER(name) LIKE '%projectile%' OR LOWER(name) LIKE '%physics%') GROUP BY name ORDER BY SUM(dur) DESC LIMIT 100"""),
+            ("Frame miss counters", """SELECT t.name,COUNT(*) AS samples,SUM(CASE WHEN c.value>0 THEN 1 ELSE 0 END) AS nonzero,ROUND(AVG(c.value),3) AS average,MAX(c.value) AS maximum FROM counter c JOIN counter_track t ON t.id=c.track_id WHERE t.name LIKE '%PrevFrameMissed%' OR t.name LIKE '%PrevGpuFrameMissed%' OR t.name LIKE '%PrevHwcFrameMissed%' GROUP BY t.name"""),
+            ("GPU-related tables exposed in trace", "SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE '%gpu%' OR name LIKE '%fence%' OR name LIKE '%sync%' OR name LIKE '%frame_timeline%') ORDER BY name"),
+            ("Frame timeline tracks", "SELECT name,COUNT(*) AS events FROM slice WHERE LOWER(name) LIKE '%frame%' OR LOWER(name) LIKE '%jank%' GROUP BY name ORDER BY COUNT(*) DESC LIMIT 100")
+          ]
 
-          try:
-              slices = run("""
-                SELECT name, COUNT(*) AS events,
-                       ROUND(SUM(dur)/1e9, 3) AS total_seconds,
-                       ROUND(MAX(dur)/1e6, 3) AS max_ms
-                FROM slice WHERE dur >= 0
-                GROUP BY name ORDER BY SUM(dur) DESC LIMIT 60
-              """)
-              section("Top slices by accumulated duration", slices)
-          except Exception as e:
-              out.append("\\nSlices no disponibles: " + str(e) + "\\n")
+          for title, sql in queries:
+              try:
+                  section(title, run(sql))
+              except Exception as e:
+                  out.append("\\n## " + title + "\\nQuery unavailable: " + str(e) + "\\n")
 
-          try:
-              sched = run("""
-                SELECT th.name AS thread, COUNT(*) AS slices,
-                       ROUND(SUM(sc.dur)/1e9, 3) AS running_seconds,
-                       ROUND(MAX(sc.dur)/1e6, 3) AS max_run_ms,
-                       GROUP_CONCAT(DISTINCT sc.cpu) AS cpus
-                FROM sched sc JOIN thread th USING(utid)
-                WHERE sc.dur > 0
-                GROUP BY th.name ORDER BY SUM(sc.dur) DESC LIMIT 40
-              """)
-              section("Top scheduled threads", sched)
-          except Exception as e:
-              out.append("\\nSched no disponible: " + str(e) + "\\n")
-
-          try:
-              counters = run("""
-                SELECT t.name AS counter, COUNT(*) AS samples,
-                       ROUND(MIN(c.value), 2) AS min_value,
-                       ROUND(AVG(c.value), 2) AS avg_value,
-                       ROUND(MAX(c.value), 2) AS max_value
-                FROM counter c JOIN counter_track t ON t.id = c.track_id
-                GROUP BY t.name ORDER BY t.name LIMIT 100
-              """)
-              section("Counter tracks", counters)
-          except Exception as e:
-              out.append("\\nCounters no disponibles: " + str(e) + "\\n")
-
-          try:
-              timing = run("""
-                SELECT ROUND((MAX(ts + dur) - MIN(ts))/1e9, 2) AS slice_span_seconds,
-                       COUNT(*) AS complete_slices
-                FROM slice WHERE dur > 0
-              """)
-              section("Trace time span", timing)
-          except Exception as e:
-              out.append("\\nTrace span no disponible: " + str(e) + "\\n")
-
-          try:
-              draw = run("""
-                SELECT COUNT(*) AS frames,
-                       ROUND(AVG(dur)/1e6, 2) AS avg_ms,
-                       ROUND(MAX(dur)/1e6, 2) AS max_ms,
-                       SUM(CASE WHEN dur > 16666667 THEN 1 ELSE 0 END) AS over_16_7ms,
-                       SUM(CASE WHEN dur > 33333333 THEN 1 ELSE 0 END) AS over_33_3ms,
-                       SUM(CASE WHEN dur > 50000000 THEN 1 ELSE 0 END) AS over_50ms
-                FROM slice WHERE name = 'onDrawFrame' AND dur > 0
-              """)
-              section("Game draw-frame timing", draw)
-          except Exception as e:
-              out.append("\\nDraw timing no disponible: " + str(e) + "\\n")
-
-          try:
-              glstate = run("""
-                SELECT st.state, COUNT(*) AS intervals,
-                       ROUND(SUM(st.dur)/1e9, 3) AS total_seconds,
-                       ROUND(MAX(st.dur)/1e6, 3) AS max_interval_ms,
-                       GROUP_CONCAT(DISTINCT st.blocked_function) AS blocked_functions
-                FROM thread_state st JOIN thread th USING(utid)
-                WHERE th.name LIKE 'GLThread%'
-                GROUP BY st.state ORDER BY SUM(st.dur) DESC
-              """)
-              section("GLThread scheduler states", glstate)
-          except Exception as e:
-              out.append("\\nGLThread states no disponibles: " + str(e) + "\\n")
-
-          try:
-              missed = run("""
-                SELECT t.name AS counter, COUNT(*) AS samples,
-                       SUM(CASE WHEN c.value > 0 THEN 1 ELSE 0 END) AS nonzero_samples,
-                       ROUND(AVG(c.value), 3) AS average,
-                       MAX(c.value) AS maximum
-                FROM counter c JOIN counter_track t ON t.id = c.track_id
-                WHERE t.name LIKE '%PrevFrameMissed%'
-                   OR t.name LIKE '%PrevGpuFrameMissed%'
-                   OR t.name LIKE '%PrevHwcFrameMissed%'
-                GROUP BY t.name
-              """)
-              section("Frame-miss counters", missed)
-          except Exception as e:
-              out.append("\\nFrame miss counters no disponibles: " + str(e) + "\\n")
-
-          try:
-              heavy = run("""
-                SELECT ROUND(dur/1e6, 2) AS duration_ms, ts, name
-                FROM slice WHERE name = 'onDrawFrame' AND dur > 0
-                ORDER BY dur DESC LIMIT 20
-              """)
-              section("20 slowest game draw frames", heavy)
-          except Exception as e:
-              out.append("\\nSlow frames no disponibles: " + str(e) + "\\n")
-
-          try:
-              child_work = run("""
-                WITH slow AS (
-                  SELECT id, ts, dur
-                  FROM slice
-                  WHERE name = 'onDrawFrame' AND dur > 16666667
-                  ORDER BY dur DESC LIMIT 40
-                )
-                SELECT ROUND(p.dur/1e6, 2) AS frame_ms,
-                       p.ts AS frame_ts,
-                       c.name AS child_slice,
-                       COUNT(*) AS occurrences,
-                       ROUND(SUM(c.dur)/1e6, 2) AS child_total_ms,
-                       ROUND(MAX(c.dur)/1e6, 2) AS child_max_ms
-                FROM slow p JOIN slice c ON c.parent_id = p.id
-                WHERE c.dur >= 0
-                GROUP BY p.id, c.name
-                ORDER BY p.dur DESC, SUM(c.dur) DESC
-              """)
-              section("Work nested inside slow draw frames", child_work)
-          except Exception as e:
-              out.append("\\nNested frame work unavailable: " + str(e) + "\\n")
-
-          try:
-              keywords = run("""
-                SELECT name, COUNT(*) AS occurrences,
-                       ROUND(SUM(dur)/1e9, 3) AS total_seconds,
-                       ROUND(MAX(dur)/1e6, 3) AS max_ms
-                FROM slice
-                WHERE dur >= 0 AND (
-                  LOWER(name) LIKE '%explos%' OR
-                  LOWER(name) LIKE '%particle%' OR
-                  LOWER(name) LIKE '%effect%' OR
-                  LOWER(name) LIKE '%damage%' OR
-                  LOWER(name) LIKE '%projectile%' OR
-                  LOWER(name) LIKE '%physics%'
-                )
-                GROUP BY name ORDER BY SUM(dur) DESC LIMIT 80
-              """)
-              section("Explosion, particle, physics and damage slices", keywords)
-          except Exception as e:
-              out.append("\\nKeyword slices unavailable: " + str(e) + "\\n")
-
-          try:
-              frame_context = run("""
-                SELECT ROUND(dur/1e6, 2) AS frame_ms, ts, id, track_id
-                FROM slice
-                WHERE name = 'onDrawFrame' AND dur > 16666667
-                ORDER BY dur DESC LIMIT 40
-              """)
-              section("Slow frame timestamps and tracks", frame_context)
-          except Exception as e:
-              out.append("\\nFrame context unavailable: " + str(e) + "\\n")
-
-          try:
-              track_info = run("""
-                SELECT DISTINCT s.track_id, tt.utid, th.name AS thread_name,
-                       pr.name AS process_name
-                FROM slice s
-                JOIN thread_track tt ON tt.id = s.track_id
-                JOIN thread th ON th.utid = tt.utid
-                LEFT JOIN process pr ON pr.upid = th.upid
-                WHERE s.name = 'onDrawFrame' AND s.dur > 0
-                ORDER BY s.track_id
-              """)
-              section("Thread identity for onDrawFrame", track_info)
-          except Exception as e:
-              out.append("\\nFrame thread identity unavailable: " + str(e) + "\\n")
-
-          try:
-              overlap = run("""
-                WITH slow AS (
-                  SELECT id, ts, dur, track_id
-                  FROM slice
-                  WHERE name = 'onDrawFrame' AND dur > 16666667
-                ),
-                owner AS (
-                  SELECT DISTINCT tt.utid, th.name AS thread_name
-                  FROM slow p
-                  JOIN thread_track tt ON tt.id = p.track_id
-                  JOIN thread th ON th.utid = tt.utid
-                )
-                SELECT ROUND(p.dur/1e6, 2) AS frame_ms,
-                       p.ts AS frame_ts,
-                       st.state AS thread_state,
-                       COUNT(*) AS overlapping_intervals,
-                       ROUND(SUM(
-                         MAX(0, MIN(st.ts + st.dur, p.ts + p.dur) -
-                                  MAX(st.ts, p.ts))
-                       )/1e6, 3) AS overlap_ms,
-                       GROUP_CONCAT(DISTINCT st.blocked_function) AS blocked_functions
-                FROM slow p
-                JOIN thread_track tt ON tt.id = p.track_id
-                JOIN thread_state st ON st.utid = tt.utid
-                  AND st.ts < p.ts + p.dur
-                  AND st.ts + st.dur > p.ts
-                GROUP BY p.id, st.state
-                ORDER BY p.dur DESC, overlap_ms DESC
-              """)
-              section("Scheduler-state overlap inside each slow draw frame", overlap)
-          except Exception as e:
-              out.append("\\nPer-frame scheduler correlation unavailable: " + str(e) + "\\n")
-
-          try:
-              blocked = run("""
-                SELECT st.state,
-                       COALESCE(st.blocked_function, '(sin blocked_function)') AS blocked_function,
-                       COALESCE(CAST(st.io_wait AS TEXT), '(sin dato)') AS io_wait,
-                       COUNT(*) AS intervals,
-                       ROUND(SUM(st.dur)/1e9, 4) AS total_seconds,
-                       ROUND(MAX(st.dur)/1e6, 3) AS max_interval_ms
-                FROM thread_state st
-                JOIN thread_track tt ON tt.utid = st.utid
-                JOIN slice fr ON fr.track_id = tt.id
-                WHERE fr.name = 'onDrawFrame'
-                  AND fr.dur > 16666667
-                  AND st.ts < fr.ts + fr.dur
-                  AND st.ts + st.dur > fr.ts
-                  AND st.state IN ('S', 'D')
-                GROUP BY st.state, blocked_function, io_wait
-                ORDER BY SUM(st.dur) DESC
-                LIMIT 100
-              """)
-              section("Blocked/sleep details overlapping slow GL frames", blocked)
-          except Exception as e:
-              out.append("\\nBlocked details unavailable: " + str(e) + "\\n")
-
-          try:
-              gl_sleep = run("""
-                SELECT ROUND(fr.dur/1e6, 2) AS frame_ms,
-                       fr.ts AS frame_ts,
-                       st.state,
-                       ROUND(MAX(0, MIN(st.ts + st.dur, fr.ts + fr.dur) -
-                                      MAX(st.ts, fr.ts))/1e6, 3) AS overlap_ms,
-                       st.blocked_function,
-                       st.io_wait
-                FROM slice fr
-                JOIN thread_track tt ON tt.id = fr.track_id
-                JOIN thread_state st ON st.utid = tt.utid
-                  AND st.ts < fr.ts + fr.dur
-                  AND st.ts + st.dur > fr.ts
-                WHERE fr.name = 'onDrawFrame'
-                  AND fr.dur > 16666667
-                  AND st.state IN ('S', 'D')
-                ORDER BY fr.dur DESC, overlap_ms DESC
-                LIMIT 250
-              """)
-              section("Individual sleeping/blocked intervals in slow frames", gl_sleep)
-          except Exception as e:
-              out.append("\\nIndividual blocked intervals unavailable: " + str(e) + "\\n")
-
-          try:
-              schema = run("""
-                SELECT name, sql
-                FROM sqlite_master
-                WHERE type = 'table'
-                  AND (name LIKE '%sched%' OR name LIKE '%fence%'
-                       OR name LIKE '%binder%' OR name LIKE '%gpu%'
-                       OR name LIKE '%sync%')
-                ORDER BY name
-              """)
-              section("Available scheduler/sync/GPU trace tables", schema)
-          except Exception as e:
-              out.append("\\nTrace table inventory unavailable: " + str(e) + "\\n")
-
-          try:
-              sched_overlap = run("""
-                WITH slow AS (
-                  SELECT id, ts, dur, track_id
-                  FROM slice
-                  WHERE name = 'onDrawFrame' AND dur > 16666667
-                )
-                SELECT ROUND(p.dur/1e6, 2) AS frame_ms,
-                       p.ts AS frame_ts,
-                       ROUND(SUM(MAX(0, MIN(sc.ts + sc.dur, p.ts + p.dur) -
-                                         MAX(sc.ts, p.ts)))/1e6, 3) AS running_overlap_ms,
-                       COUNT(sc.ts) AS sched_intervals,
-                       GROUP_CONCAT(DISTINCT sc.cpu) AS cpus
-                FROM slow p
-                JOIN thread_track tt ON tt.id = p.track_id
-                LEFT JOIN sched sc ON sc.utid = tt.utid
-                  AND sc.ts < p.ts + p.dur
-                  AND sc.ts + sc.dur > p.ts
-                GROUP BY p.id
-                ORDER BY p.dur DESC
-              """)
-              section("CPU running time overlapping each slow draw frame", sched_overlap)
-          except Exception as e:
-              out.append("\\nPer-frame CPU overlap unavailable: " + str(e) + "\\n")
-
-          Path("abt-trace-report.md").write_text("# Angry Birds Transformers - Perfetto analysis\\n\\n" + "".join(out))
-          print(Path("abt-trace-report.md").read_text())
+          report = "# Angry Birds Transformers - Latest explosion Perfetto analysis\\n\\n" + "".join(out)
+          Path("abt-trace-report.md").write_text(report)
+          print(report)
           tp.close()
           PY
           python analyze.py
@@ -350,6 +76,6 @@ jobs:
       - name: Upload analysis report
         uses: actions/upload-artifact@v4
         with:
-          name: abt-perfetto-analysis
+          name: abt-explosion-perfetto-analysis
           path: abt-trace-report.md
           retention-days: 7
