@@ -61,7 +61,9 @@ def parse_pak(blob, label, out_dir):
     text_ext = {".xml", ".atlas", ".txt", ".json", ".manifest", ".ini", ".csv"}
     for i, row in enumerate(file_rows):
         name_off, unpacked, offset, compressed, timestamp, packed = row
-        name = paths.get(i) or cstr(name_off)
+        # File-name string entries already contain the archive-relative path.
+        # Prefixing the folder table duplicates segments (e.g. textures/textures/...).
+        name = cstr(name_off)
         if offset > len(blob) or packed > len(blob) - offset:
             raise ValueError(f"{label}: payload bounds invalid for entry {i} ({name})")
         raw = blob[offset:offset + packed]
@@ -97,18 +99,24 @@ def main():
     ap.add_argument("apk")
     ap.add_argument("--out", required=True)
     ap.add_argument("--report", required=True)
+    ap.add_argument("--all-paks", action="store_true", help="scan every XGS v2 KPX PAK in the APK")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     all_lines = []
     wanted = ("assets/data/ui/ui_bundles.pak", "assets/data/uisplash.pak", "assets/data/uienv.pak")
     with zipfile.ZipFile(args.apk) as z:
-        names = set(z.namelist())
-        for name in wanted:
-            if name not in names:
+        names = sorted(n for n in z.namelist() if n.lower().endswith(".pak")) if args.all_paks else list(wanted)
+        for name in names:
+            if name not in z.namelist():
                 all_lines.append(f"NOT FOUND: {name}")
                 continue
-            target = os.path.join(args.out, os.path.basename(name)[:-4])
-            all_lines.extend(parse_pak(z.read(name), name, target))
+            blob = z.read(name)
+            if len(blob) < 4 or blob[0] != 2 or blob[1:4] != b"KPX":
+                all_lines.append(f"SKIPPED unsupported/non-v2 PAK: {name} | size={len(blob)} | header={blob[:8].hex(' ')}")
+                continue
+            safe_label = name.replace("/", "_").removesuffix(".pak")
+            target = os.path.join(args.out, safe_label)
+            all_lines.extend(parse_pak(blob, name, target))
     with open(args.report, "w", encoding="utf-8") as f:
         f.write("\n".join(all_lines) + "\n")
     print("\n".join(line for line in all_lines if line.startswith("PAK ") or line.startswith("NOT FOUND:")))
