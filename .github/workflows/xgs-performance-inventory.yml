@@ -50,6 +50,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: xgs-performance-path-inventory
-          path: ${{ runner.temp }}/out/xgs-performance-paths.txt
+          path: |
+            ${{ runner.temp }}/out/xgs-performance-paths.txt
+            ${{ runner.temp }}/out/xgs-render-pass-inspection.md
           if-no-files-found: error
           retention-days: 7
