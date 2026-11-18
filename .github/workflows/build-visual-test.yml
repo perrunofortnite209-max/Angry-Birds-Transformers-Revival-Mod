@@ -42,18 +42,15 @@ jobs:
           sdkmanager --install 'build-tools;35.0.0'
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
       - name: Download exact original APK and saved icon
-        env:
-          GH_TOKEN: \${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p input output
-          gh release download game --repo "$GITHUB_REPOSITORY" --pattern "*.apk" --dir input
-          gh release download game --repo "$GITHUB_REPOSITORY" --pattern "f3313d17-ccf7-4c82-8007-c68b4233b65d.png" --dir input
-          mapfile -t APKS < <(find input -maxdepth 1 -type f -name '*.apk')
-          test "\${#APKS[@]}" -eq 1
-          echo "APK_FILE=\${APKS[0]}" >> "$GITHUB_ENV"
+          curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/com.rovio.angrybirdstransformers-24200.apk" -o input/com.rovio.angrybirdstransformers-24200.apk
+          curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/f3313d17-ccf7-4c82-8007-c68b4233b65d.png" -o input/f3313d17-ccf7-4c82-8007-c68b4233b65d.png
+          echo "APK_FILE=input/com.rovio.angrybirdstransformers-24200.apk" >> "$GITHUB_ENV"
           echo "ICON_FILE=input/f3313d17-ccf7-4c82-8007-c68b4233b65d.png" >> "$GITHUB_ENV"
-          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  \${APKS[0]}" | sha256sum -c -
+          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  input/com.rovio.angrybirdstransformers-24200.apk" | sha256sum -c -
+
       - name: Build visual-only APK with native settings preview
         run: |
           set -euo pipefail
