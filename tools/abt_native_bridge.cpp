@@ -38,23 +38,26 @@ static int current_graphics(uintptr_t base) {
 static int set_graphics(uintptr_t base, int target) {
     if (target < 0 || target > 3) return -1;
 
-    const int previous = current_graphics(base);
-    if (previous < 0 || previous > 4) return -2;
-    if (previous == target) return target + 1;
+    int current = current_graphics(base);
+    if (current < 0 || current > 3) return -2;
+    if (current == target) return target + 1;
 
-    // ChangePerformance is the engine's complete runtime path: it loads the
-    // adjacent profile, commits m_eCurrentPerformance, resets FPS profiling,
-    // and refreshes the active renderer/device resources. Calling only
-    // LoadDeviceConfigByPerformance() loads the XML but skips that refresh.
+    // ChangePerformance moves exactly one adjacent profile per call. Use the
+    // engine's own transition path repeatedly so every target (including a
+    // jump from Low directly to Extra High) is reached and the renderer is
+    // refreshed at each successful step.
     using ChangePerformance = int (*)(int);
     auto change = reinterpret_cast<ChangePerformance>(base + 0x6ed4b8);
-    const int direction = target > previous ? 1 : -1;
-    const int changed = change(direction);
-    const int updated = current_graphics(base);
+    for (int step = 0; step < 3 && current != target; ++step) {
+        const int direction = target > current ? 1 : -1;
+        const int changed = change(direction);
+        if (changed != 1) return -3;
+        const int updated = current_graphics(base);
+        if (updated != current + direction) return -4;
+        current = updated;
+    }
 
-    // The native method returns 1 only when the profile transition succeeds.
-    if (changed == 1 && updated == target) return updated + 1;
-    return changed == 1 ? -3 : -4;
+    return current == target ? target + 1 : -5;
 }
 
 } // namespace
