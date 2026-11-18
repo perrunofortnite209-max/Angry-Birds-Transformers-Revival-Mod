@@ -72,6 +72,20 @@ for path in sorted(root.rglob("*")):
         if "settings" in path.name.lower():
             rows.append("  === COMPLETE SETTINGS STRING POOL (NUL-DELIMITED) ===")
             rows.extend(f"  P{i:04d}: {value[:1000]}" for i, value in enumerate(pool_strings))
+            rows.append("  === OFFSET TABLE DECODE CANDIDATES (POOL-RELATIVE) ===")
+            pool = data[table_end:]
+            for i, offset in enumerate(offsets):
+                if offset >= len(pool):
+                    rows.append(f"  O{i:04d} offset={offset}: OUT_OF_RANGE")
+                    continue
+                end = pool.find(b"\x00", offset)
+                if end < 0:
+                    rows.append(f"  O{i:04d} offset={offset}: NO_TERMINATOR")
+                    continue
+                raw = pool[offset:end]
+                value = raw.decode("utf-8", "replace")
+                rows.append(f"  O{i:04d} offset={offset}: {value[:300]!r}")
+            rows.append("  === END OFFSET TABLE DECODE ===")
             rows.append("  === END SETTINGS STRING POOL ===")
         lines = pool_strings
     else:
