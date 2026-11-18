@@ -1,0 +1,27 @@
+
+name: Upload Perfetto Trace
+
+on:
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download trace from release
+        run: |
+          curl -L \
+            "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/abt.pftrace" \
+            -o abt.pftrace
+
+      - name: Verify trace
+        run: |
+          ls -lh abt.pftrace
+          test -s abt.pftrace
+
+      - name: Upload trace artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: abt-perfetto-trace
+          path: abt.pftrace
+          retention-days: 7
