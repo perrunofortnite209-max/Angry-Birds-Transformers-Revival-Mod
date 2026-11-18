@@ -46,6 +46,7 @@ def main():
         elf = ELFFile(f)
         lines.append(f"ELF class={elf.elfclass} machine={elf.header['e_machine']} endian={elf.little_endian}")
         symbols = {}
+        all_named = {}
         for sec in elf.iter_sections():
             if sec.header.sh_type not in ("SHT_SYMTAB", "SHT_DYNSYM"):
                 continue
@@ -54,6 +55,7 @@ def main():
                 size = int(sym.entry.st_size)
                 addr = int(sym.entry.st_value)
                 if name and size:
+                    all_named.setdefault(addr, (name, size))
                     cats = [key for key, rx in CATEGORIES.items() if rx.search(name)]
                     if cats:
                         symbols[(addr, name)] = (size, cats)
@@ -79,8 +81,38 @@ def main():
         textsec = elf.get_section_by_name(".text")
         if textsec:
             md = Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN)
+            md.detail = True
             text = textsec.data()
             base = int(textsec.header.sh_addr)
+            # Resolve direct BL references across .text; names alone are not evidence.
+            target_names = {
+                0x6e5f80: "CApp::DoPresent",
+                0x482f68: "LimitFPSWithSleep",
+                0x6e6620: "CApp::GetDesiredFramerate",
+                0x6ed3e0: "CDeviceConfig::GetDesiredFramerate",
+                0x817bd8: "ExientGLSurfaceView::nativeDrawFrame",
+                0x4351f4: "CGame::RenderFrame",
+                0x484d80: "CRenderManager::RenderFrame",
+            }
+            callers = {addr: [] for addr in target_names}
+            for ins in md.disasm(text, base):
+                if ins.mnemonic == "bl" and ins.operands and ins.operands[0].type == 2:
+                    dest = int(ins.operands[0].imm)
+                    if dest in callers:
+                        owner_addr = max((a for a in all_named if a <= ins.address), default=None)
+                        owner = all_named.get(owner_addr, ("unknown", 0))[0]
+                        callers[dest].append((ins.address, owner))
+            lines.append("\\nDIRECT CALLER XREFS (BL instructions; static only):")
+            console.append("\\nDirect caller cross-references (BL; static only):")
+            for dest, label in target_names.items():
+                entries = callers[dest]
+                row = f"{label} @0x{dest:x}: {len(entries)} direct callers"
+                lines.append(row)
+                console.append(row)
+                for callsite, owner in entries[:20]:
+                    item = f"  callsite=0x{callsite:x} in {owner}"
+                    lines.append(item)
+                    console.append(item)
             all_symbols = [(addr, name, size, cats) for (addr, name), (size, cats) in symbols.items()]
             selected = []
             used = set()
@@ -106,6 +138,11 @@ def main():
                 instructions = list(md.disasm(text[off:off + min(size, 0x300)], addr))
                 for ins in instructions:
                     row = f"  {ins.address:08x}: {ins.mnemonic:8} {ins.op_str}"
+                    if ins.mnemonic == "bl" and ins.operands and ins.operands[0].type == 2:
+                        dest = int(ins.operands[0].imm)
+                        target = all_named.get(dest, (target_names.get(dest, ""), 0))[0]
+                        if target:
+                            row += f"  ; {target}"
                     lines.append(row)
                     console.append(row)
         else:
