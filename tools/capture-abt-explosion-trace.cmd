@@ -7,8 +7,22 @@ set "LOCAL_CFG=%TEMP%\abt-perfetto-config.pbtxt"
 set "OUT=%USERPROFILE%\Desktop\abt-explosion-trace.pftrace"
 set "REPORT=%USERPROFILE%\Desktop\abt-perfetto-capture-log.txt"
 
+rem Locate adb.exe even when this script is launched by double-click.
+set "ADB="
+if exist "%~dp0adb.exe" set "ADB=%~dp0adb.exe"
+if not defined ADB if exist "%CD%\adb.exe" set "ADB=%CD%\adb.exe"
+if not defined ADB if exist "%USERPROFILE%\Documents\platform-tools\adb.exe" set "ADB=%USERPROFILE%\Documents\platform-tools\adb.exe"
+if not defined ADB if exist "%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe" set "ADB=%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe"
+if not defined ADB set "ADB=adb"
+"%ADB%" version >NUL 2>&1
+if errorlevel 1 (
+  echo ADB executable not found. Put this CMD beside adb.exe or install Android platform-tools.
+  pause
+  exit /b 1
+)
+
 echo Checking ADB connection...
-adb get-state >NUL 2>&1
+"%ADB%" get-state >NUL 2>&1
 if errorlevel 1 (
   echo Phone not detected. Enable USB debugging and accept the USB prompt.
   pause
@@ -16,7 +30,7 @@ if errorlevel 1 (
 )
 
 echo Checking Angry Birds Transformers process...
-adb shell pidof %PKG%
+"%ADB%" shell pidof %PKG%
 if errorlevel 1 (
   echo Game process not found. Open the game and enter a level first.
   pause
@@ -71,7 +85,7 @@ echo Creating a 30-second Perfetto capture configuration...
   echo }
 ) > "%LOCAL_CFG%"
 
-adb push "%LOCAL_CFG%" "%REMOTE_CFG%" >NUL
+"%ADB%" push "%LOCAL_CFG%" "%REMOTE_CFG%" >NUL
 if errorlevel 1 (
   echo Could not copy Perfetto configuration to phone.
   pause
@@ -84,7 +98,7 @@ echo Play normally and trigger several large explosions now.
 echo Please do not minimize or close the game.
 echo.
 
-adb shell perfetto --txt -c "%REMOTE_CFG%" -o "%REMOTE_TRACE%" > "%REPORT%" 2>&1
+"%ADB%" shell perfetto --txt -c "%REMOTE_CFG%" -o "%REMOTE_TRACE%" > "%REPORT%" 2>&1
 if errorlevel 1 (
   echo.
   echo Perfetto capture failed. See Desktop\abt-perfetto-capture-log.txt
@@ -94,14 +108,14 @@ if errorlevel 1 (
 )
 
 echo Pulling trace to Desktop...
-adb pull "%REMOTE_TRACE%" "%OUT%" >> "%REPORT%" 2>&1
+"%ADB%" pull "%REMOTE_TRACE%" "%OUT%" >> "%REPORT%" 2>&1
 if errorlevel 1 (
   echo Could not pull the trace. See Desktop\abt-perfetto-capture-log.txt
   pause
   exit /b 1
 )
 
-adb shell rm -f "%REMOTE_CFG%" "%REMOTE_TRACE%" >NUL 2>&1
+"%ADB%" shell rm -f "%REMOTE_CFG%" "%REMOTE_TRACE%" >NUL 2>&1
 del "%LOCAL_CFG%" >NUL 2>&1
 
 echo.
