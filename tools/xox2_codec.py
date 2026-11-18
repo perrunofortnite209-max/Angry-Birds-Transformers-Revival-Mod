@@ -165,7 +165,14 @@ def encode(xml: str) -> bytes:
             end = xml.find("<", pos)
             if end < 0:
                 end = len(xml)
-            document.extend(_token_bytes(intern(xml[pos:end])))
+            text_segment = xml[pos:end]
+            # Whitespace is structural in XOX2. Keep whitespace-only runs raw
+            # so they also delimit adjacent token runs (for example after an
+            # XML declaration); non-whitespace text nodes are table tokens.
+            if text_segment.isspace():
+                document.extend(text_segment.encode("utf-8"))
+            else:
+                document.extend(_token_bytes(intern(text_segment)))
             pos = end
             continue
 
