@@ -46,28 +46,36 @@ jobs:
           ns="{http://schemas.android.com/apk/res/android}"
           app=manifest.find("application")
           names=[]
+          launcher_names=[]
           for tag in ("activity","activity-alias"):
               for node in app.findall(tag):
                   name=node.get(ns+"name")
-                  if name: names.append(name)
+                  if not name: continue
+                  names.append(name)
+                  for filt in node.findall("intent-filter"):
+                      actions={x.get(ns+"name") for x in filt.findall("action")}
+                      cats={x.get(ns+"name") for x in filt.findall("category")}
+                      if "android.intent.action.MAIN" in actions and "android.intent.category.LAUNCHER" in cats:
+                          launcher_names.append(name)
+                          break
           package=manifest.get("package","")
-          normalized=[]
-          for name in names:
+          def normalize(name):
               if name.startswith("."): name=package+name
               elif "." not in name: name=package+"."+name
-              normalized.append(name.replace(".","/"))
+              return name.replace(".","/")
+          launcher_classes=[normalize(x) for x in launcher_names]
+          if len(launcher_classes)!=1:
+              raise SystemExit(f"Expected exactly one MAIN/LAUNCHER activity, found {launcher_names}")
           files=list(root.glob("smali*/**/*.smali"))
           candidates=[]
           for p in files:
-              s=p.read_text(errors="ignore")
-              m=re.search(r"(?m)^\.class\s+[^\n]*?L([^;]+);",s)
-              if not m: continue
-              cls=m.group(1)
-              if cls in normalized or ("onCreate" in s and ("Activity" in cls or "Game" in cls)):
-                  candidates.append((p,s,cls,cls in normalized))
-          candidates.sort(key=lambda x:(not x[3],x[2]))
-          if not candidates: raise SystemExit("No Activity candidates found; inspect manifest and dex class list")
-          p,s,cls,is_manifest= candidates[0]
+              source=p.read_text(errors="ignore")
+              m=re.search(r"(?m)^\\.class\\s+[^\\n]*?L([^;]+);",source)
+              if m and m.group(1)==launcher_classes[0]:
+                  candidates.append((p,source,m.group(1),True))
+          if len(candidates)!=1:
+              raise SystemExit(f"Could not resolve launcher Activity smali: {launcher_names}; matches={len(candidates)}")
+          p,s,cls,is_manifest=candidates[0]
           Path("output/main_activity.smali").write_text(s)
           (Path("output/manifest.xml")).write_text((root/"AndroidManifest.xml").read_text(errors="ignore"))
           icon_files=[]
