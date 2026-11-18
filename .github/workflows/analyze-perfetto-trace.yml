@@ -151,6 +151,60 @@ jobs:
           except Exception as e:
               out.append("\\nSlow frames no disponibles: " + str(e) + "\\n")
 
+          try:
+              child_work = run("""
+                WITH slow AS (
+                  SELECT id, ts, dur
+                  FROM slice
+                  WHERE name = 'onDrawFrame' AND dur > 16666667
+                  ORDER BY dur DESC LIMIT 40
+                )
+                SELECT ROUND(p.dur/1e6, 2) AS frame_ms,
+                       p.ts AS frame_ts,
+                       c.name AS child_slice,
+                       COUNT(*) AS occurrences,
+                       ROUND(SUM(c.dur)/1e6, 2) AS child_total_ms,
+                       ROUND(MAX(c.dur)/1e6, 2) AS child_max_ms
+                FROM slow p JOIN slice c ON c.parent_id = p.id
+                WHERE c.dur >= 0
+                GROUP BY p.id, c.name
+                ORDER BY p.dur DESC, SUM(c.dur) DESC
+              """)
+              section("Work nested inside slow draw frames", child_work)
+          except Exception as e:
+              out.append("\\nNested frame work unavailable: " + str(e) + "\\n")
+
+          try:
+              keywords = run("""
+                SELECT name, COUNT(*) AS occurrences,
+                       ROUND(SUM(dur)/1e9, 3) AS total_seconds,
+                       ROUND(MAX(dur)/1e6, 3) AS max_ms
+                FROM slice
+                WHERE dur >= 0 AND (
+                  LOWER(name) LIKE '%explos%' OR
+                  LOWER(name) LIKE '%particle%' OR
+                  LOWER(name) LIKE '%effect%' OR
+                  LOWER(name) LIKE '%damage%' OR
+                  LOWER(name) LIKE '%projectile%' OR
+                  LOWER(name) LIKE '%physics%'
+                )
+                GROUP BY name ORDER BY SUM(dur) DESC LIMIT 80
+              """)
+              section("Explosion, particle, physics and damage slices", keywords)
+          except Exception as e:
+              out.append("\\nKeyword slices unavailable: " + str(e) + "\\n")
+
+          try:
+              frame_context = run("""
+                SELECT ROUND(dur/1e6, 2) AS frame_ms, ts, id, track_id
+                FROM slice
+                WHERE name = 'onDrawFrame' AND dur > 16666667
+                ORDER BY dur DESC LIMIT 40
+              """)
+              section("Slow frame timestamps and tracks", frame_context)
+          except Exception as e:
+              out.append("\\nFrame context unavailable: " + str(e) + "\\n")
+
           Path("abt-trace-report.md").write_text("# Angry Birds Transformers - Perfetto analysis\\n\\n" + "".join(out))
           print(Path("abt-trace-report.md").read_text())
           tp.close()
