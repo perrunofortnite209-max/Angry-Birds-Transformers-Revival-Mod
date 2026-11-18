@@ -49,7 +49,7 @@ def main():
                     if sym.entry.st_info.type=="STT_FUNC" and sym.name:
                         funcs.append((int(sym.entry.st_value),int(sym.entry.st_size),sym.name))
         funcs.sort()
-        call_targets={0x6ed26c:"CDeviceConfig::LoadDeviceConfigByPerformance",0x6ed4b8:"CDeviceConfig::ChangePerformance",0x6ed640:"CDeviceConfig::UpdateRecommendedPerformance"}
+        call_targets={0x6ed26c:"CDeviceConfig::LoadDeviceConfigByPerformance",0x6ed4b8:"CDeviceConfig::ChangePerformance",0x6ed640:"CDeviceConfig::UpdateRecommendedPerformance",0x6ed610:"CDeviceConfig::GetCurrentPerformance"}
         for ins in insns:
             if ins.mnemonic=="bl" and ins.operands and ins.operands[0].type==arm64_const.ARM64_OP_IMM:
                 dest=int(ins.operands[0].imm)
@@ -62,7 +62,7 @@ def main():
         for fa,fs,fn in funcs:
             if any(key in fn.lower() for key in ("deviceconfig","loadxmlconfig","configprofile","configmanager")):
                 out.append(f"SYMBOL 0x{fa:x} size=0x{fs:x} {fn}")
-                if ("loadxmlconfig" in fn.lower() and "cmapmanager" in fn.lower()) or "cdeviceconfig" in fn.lower() or "mainloadingdeviceconfig" in fn.lower():
+                if ("loadxmlconfig" in fn.lower() and "cmapmanager" in fn.lower()) or "cdeviceconfig" in fn.lower() or "mainloadingdeviceconfig" in fn.lower() or "ingameresultsscreen" in fn.lower():
                     if fs:
                         off=fa-textbase
                         for ins in md.disasm(text[off:off+fs],fa):
