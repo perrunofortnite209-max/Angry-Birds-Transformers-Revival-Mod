@@ -59,21 +59,36 @@ jobs:
             mkdir -p "$dest"
             "$ABG" unpack "$p" "$dest"
           done
-          find "$RUNNER_TEMP/unpacked" -type f -iname '*.xml' -print0 | while IFS= read -r -d '' f; do
-            rel="${f#"$RUNNER_TEMP/unpacked"/}"
-            safe="$(printf '%s' "$rel" | tr '/ ' '__')"
-            "$ABG" xox "$f" > "$RUNNER_TEMP/out/$safe"
-          done
+          python - "$ABG" "$RUNNER_TEMP/unpacked" "$RUNNER_TEMP/out" "$RUNNER_TEMP/decode-errors.txt" <<'PY'
+          import subprocess,sys
+          from pathlib import Path
+          tool,root,out,errors=map(Path,sys.argv[1:])
+          files=sorted(root.rglob("*.xml"))+sorted(root.rglob("*.XML"))
+          failed=[]
+          for f in files:
+              rel=f.relative_to(root)
+              safe=str(rel).replace("/","__").replace(" ","_")
+              result=subprocess.run([str(tool),"xox",str(f)],capture_output=True,text=True)
+              if result.returncode:
+                  failed.append(f"{rel}: {result.stderr.strip() or result.stdout.strip()}")
+                  continue
+              (out/(safe+".decoded")).write_text(result.stdout,errors="replace")
+          errors.write_text("\n".join(failed)+"\n")
+          print(f"XML candidates: {len(files)}; decoded: {len(files)-len(failed)}; decode errors: {len(failed)}")
+          if not files: raise SystemExit("No XML files found after PAK extraction.")
+          if len(files)==len(failed): raise SystemExit("No XML files could be decoded; inspect decoder compatibility.")
+          PY
       - name: Find real graphics and frame-pacing configuration candidates
         run: |
           set -euo pipefail
-          python - "$RUNNER_TEMP/out" "$RUNNER_TEMP/scan-report.md" <<'PY'
+          python - "$RUNNER_TEMP/out" "$RUNNER_TEMP/decode-errors.txt" "$RUNNER_TEMP/scan-report.md" <<'PY'
           import re,sys
           from pathlib import Path
-          root,report=Path(sys.argv[1]),Path(sys.argv[2])
+          root,errors,report=Path(sys.argv[1]),Path(sys.argv[2]),Path(sys.argv[3])
           rx=re.compile(r'quality|shadow|reflection|texture|resolution|render.?scale|post.?process|particle|effect|graphics|frame.?rate|vsync|present|anisotrop|filter|lod|detail|gpu|performance',re.I)
-          files=sorted(root.glob('*.xml'))
-          out=["# XGS graphics/configuration string scan","",f"Decoded XML files: {len(files)}",""]
+          files=sorted(root.glob('*.decoded'))
+          failed=errors.read_text(errors='replace').splitlines()
+          out=["# XGS graphics/configuration string scan","",f"Decoded XML files: {len(files)}",f"XML decode failures: {len(failed)}",""]
           matched=0
           for path in files:
               hits=[]
@@ -85,17 +100,22 @@ jobs:
               out += [f"## {path.name} — {len(hits)} matches",""]
               out += [f"- L{n}: `{line[:400]}`" for n,line in hits[:100]]
               out.append("")
-          out += ["## Interpretation","",
+          out += ["## XML files the decoder could not parse",""]
+          out += [f"- `{line[:500]}`" for line in failed[:300]]
+          out += ["","## Interpretation","",
                   "String matches are leads only. A setting is not considered runtime-active until native references and read/write behavior are confirmed.",
+                  "Decoder failures are listed rather than silently terminating the scan.",
                   "No game assets or APK files are included in this report."]
           report.write_text("\n".join(out)+"\n")
-          print(f"Decoded XML files: {len(files)}; files with candidate strings: {matched}")
+          print(f"Decoded XML files: {len(files)}; files with candidate strings: {matched}; decode failures: {len(failed)}")
           if not files: raise SystemExit("No XML files were decoded; inspect archive extraction.")
           PY
       - name: Upload text-only graphics scan report
         uses: actions/upload-artifact@v4
         with:
           name: xgs-graphics-config-candidates
-          path: ${{ runner.temp }}/scan-report.md
+          path: |
+            ${{ runner.temp }}/scan-report.md
+            ${{ runner.temp }}/decode-errors.txt
           if-no-files-found: error
           retention-days: 7
