@@ -46,7 +46,15 @@
       "original",
       "reduced"
     ],
-    "status": "research"
+    "status": "research",
+    "enabledToggle": {
+      "default": false,
+      "label": "PARCHE GRÁFICO",
+      "placement": "alongside FPS controls and other mod options",
+      "behavior": "original profile when off; optimized profile when on",
+      "apply": "on next game launch unless runtime reload is verified",
+      "status": "planned"
+    }
   },
   "display": {
     "sync": [
@@ -72,9 +80,9 @@
   "settingsEntry": {
     "enabled": true,
     "screen": "EScreen_FE_Settings",
-    "placement": "same native settings list, after RateGameButton",
+    "placement": "same native settings list, alongside the FPS limiter/unlock controls and other mod options",
     "label": "MOD SETTINGS",
-    "opens": "mod settings page inside the game UI",
+    "opens": "mod settings controls in the same native settings area",
     "preserveOriginalOptions": true,
     "floatingOverlay": false,
     "status": "research"
