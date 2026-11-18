@@ -130,7 +130,7 @@ for slot, desc in sorted(relocation_slots.items()):
 # actionable without guessing at a callable ABI or patching native code.
 lines += ["", "## Focused function disassembly"]
 focus_addresses = [0x6e7294, 0x484d34, 0x483f80, 0x48354c, 0x4832e4,
-                   0x6ebcac, 0x6ec380, 0x6ed26c, 0x6ed4b8, 0x711598, 0x7115a8, 0x7115b8]
+                   0x6ebcac, 0x6ec380, 0x6ed26c, 0x6ed4b8, 0x710dc4, 0x711300, 0x711598, 0x7115a8, 0x7115b8]
 symtab = elf.get_section_by_name(".symtab")
 symbols = []
 if symtab:
@@ -201,7 +201,7 @@ with zipfile.ZipFile(apk) as z:
 
 # Find all direct call sites of the float-setting accessor used with enum
 # indices 0 and 1 by CreateVolatileResources, then dump its implementation.
-lines += ["", "## Debug float accessor call sites"]
+lines += ["", "## Debug float table initialization and configuration copy routines"]
 for ins in insns:
     if ins.mnemonic == "bl" and ins.operands and ins.operands[0].type == CS_OP_IMM and int(ins.operands[0].imm) == 0x7115b8:
         lines.append(f"BL {ins.address:#x} -> GetDebugFloat(0x7115b8)")
