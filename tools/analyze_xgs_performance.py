@@ -15,6 +15,7 @@ CATEGORIES = {
     "update_scene": re.compile(r"update|tick|scene|particle|effect|animation", re.I),
     "streaming": re.compile(r"stream|compress|load|unload|gc|garbage", re.I),
     "engine": re.compile(r"deviceconfig|xgs", re.I),
+    "resolution": re.compile(r"resolution|viewport|surface|display|window|framebuffer|render.?target|render.?size|screen.?size|egl|swapchain|buffergeometry|set.?size", re.I),
 }
 FOCUS = [
     re.compile(p, re.I) for p in (
@@ -27,6 +28,7 @@ FOCUS = [
         r"_ZN13CDeviceConfig19GetDesiredFramerateEv",
         r"LimitFPSWithSleep",
         r"ExientGLSurfaceView|nativeDrawFrame",
+        r"resolution|viewport|surface|display|framebuffer|swapchain|render.?size|screen.?size|egl",
     )
 ]
 
@@ -136,7 +138,7 @@ def main():
                 lines.append(header)
                 console.append(header)
                 off = addr - base
-                limit = 0x800 if ("DoRender" in name or "RenderFrame" in name) else 0x300
+                limit = 0x800 if ("DoRender" in name or "RenderFrame" in name) else 0x600 if any(k in name.lower() for k in ("resolution","viewport","surface","display","framebuffer","egl","size")) else 0x300
                 instructions = list(md.disasm(text[off:off + min(size, limit)], addr))
                 for ins in instructions:
                     row = f"  {ins.address:08x}: {ins.mnemonic:8} {ins.op_str}"
