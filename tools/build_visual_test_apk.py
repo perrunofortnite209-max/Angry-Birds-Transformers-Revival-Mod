@@ -305,14 +305,11 @@ def patch_welcome(decoded, report):
     aput-boolean v5, v3, v7
     new-instance v5, Landroid/app/AlertDialog$Builder;
     invoke-direct {v5, p0}, Landroid/app/AlertDialog$Builder;-><init>(Landroid/content/Context;)V
-    const-string v6, "MOD SETTINGS"
+    const-string v6, "REVIVAL MOD  |  FPS MOTOR: 144"
     invoke-virtual {v5, v6}, Landroid/app/AlertDialog$Builder;->setTitle(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
     new-instance v6, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalSettingsListener;
     invoke-direct {v6, p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalSettingsListener;-><init>(Landroid/content/Context;)V
     invoke-virtual {v5, v2, v3, v6}, Landroid/app/AlertDialog$Builder;->setMultiChoiceItems([Ljava/lang/CharSequence;[ZLandroid/content/DialogInterface$OnMultiChoiceClickListener;)Landroid/app/AlertDialog$Builder;
-    move-result-object v5
-    const-string v6, "FPS objetivo del motor: 144 (activo)"
-    invoke-virtual {v5, v6}, Landroid/app/AlertDialog$Builder;->setMessage(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
     move-result-object v5
     const-string v6, "CERRAR"
     const/4 v7, 0x0
