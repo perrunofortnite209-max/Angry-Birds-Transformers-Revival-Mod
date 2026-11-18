@@ -5,6 +5,7 @@ on:
     branches: [feature/full-revival-mod]
     paths:
       - "tools/analyze_xgs_performance.py"
+      - "tools/analyze_xgs_render_passes.py"
       - ".github/workflows/xgs-performance-inventory.yml"
   workflow_dispatch:
 
@@ -43,6 +44,8 @@ jobs:
           PY
       - name: Inventory render, update, memory and frame-pacing paths
         run: python tools/analyze_xgs_performance.py "$RUNNER_TEMP/native/libABBS-arm64.so" "$RUNNER_TEMP/out/xgs-performance-paths.txt"
+      - name: Inspect render pass call graph and instructions
+        run: python tools/analyze_xgs_render_passes.py "$RUNNER_TEMP/private/$(basename "$(find "$RUNNER_TEMP/private" -maxdepth 1 -type f -name '*.apk' -print -quit)")" "$RUNNER_TEMP/out/xgs-render-pass-inspection.md"
       - name: Upload text-only report
         uses: actions/upload-artifact@v4
         with:
