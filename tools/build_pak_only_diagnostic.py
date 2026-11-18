@@ -16,14 +16,16 @@ def main():
     ap.add_argument("--apk",type=Path,required=True)
     ap.add_argument("--out",type=Path,required=True)
     ap.add_argument("--repo",type=Path,default=Path("."))
+    ap.add_argument("--only",choices=("settings","features","both"),default="both")
     a=ap.parse_args(); a.out.parent.mkdir(parents=True,exist_ok=True)
     builder=load(a.repo/"tools/build_visual_test_apk.py")
-    report={"type":"PAK-only diagnostic","apktool_used":False,"manifest_rebuilt":False,
+    include=("settings","features") if a.only=="both" else (a.only,)
+    report={"type":f"PAK-only diagnostic ({a.only})","selected_patch":a.only,"apktool_used":False,"manifest_rebuilt":False,
             "dex_rebuilt":False,"icon_changed":False,"welcome_dialog_added":False,
             "gameplay_fps_graphics_code_changed":False,"resources":[],"changed_zip_entries":[]}
     with tempfile.TemporaryDirectory(prefix="abt-pak-only-") as td:
         intermediate=Path(td)/"patched-with-old-signature.apk"
-        builder.patch_paks(a.apk,intermediate,a.repo.resolve(),report)
+        builder.patch_paks(a.apk,intermediate,a.repo.resolve(),report,include=include)
         with zipfile.ZipFile(a.apk,"r") as original, zipfile.ZipFile(intermediate,"r") as patched, zipfile.ZipFile(a.out,"w") as output:
             original_names=set(original.namelist())
             for info in patched.infolist():
