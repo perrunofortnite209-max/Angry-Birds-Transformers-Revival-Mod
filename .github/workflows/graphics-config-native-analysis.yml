@@ -4,6 +4,7 @@ on:
     branches: [feature/full-revival-mod]
     paths:
       - "tools/analyze_graphics_config_xrefs.py"
+      - "tools/inspect_performance_profile_table.py"
       - ".github/workflows/graphics-config-native-analysis.yml"
   workflow_dispatch:
 permissions:
@@ -39,10 +40,14 @@ jobs:
           PY
       - name: Find native graphics config readers
         run: python tools/analyze_graphics_config_xrefs.py "$RUNNER_TEMP/native/libABBS-arm64.so" "$RUNNER_TEMP/out/graphics-config-xrefs.txt"
+      - name: Resolve runtime performance profile names
+        run: python tools/inspect_performance_profile_table.py "$RUNNER_TEMP/native/libABBS-arm64.so" "$RUNNER_TEMP/out/performance-profile-table.txt"
       - name: Upload text report
         uses: actions/upload-artifact@v4
         with:
           name: native-graphics-config-xrefs
-          path: ${{ runner.temp }}/out/graphics-config-xrefs.txt
+          path: |
+            ${{ runner.temp }}/out/graphics-config-xrefs.txt
+            ${{ runner.temp }}/out/performance-profile-table.txt
           if-no-files-found: error
           retention-days: 7
