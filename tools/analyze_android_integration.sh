@@ -140,7 +140,7 @@ PYPAK
   fi
   echo
   echo "=== Safety note ==="
-  echo "Selected activity, GL view, XGS activity and renderer smali source files are included in the private diagnostics artifact for integration review; all other decoded resources stay in the runner workspace."
+  echo "Selected activity, GL view, XGS activity and renderer smali source files plus the decoded settings XML are included in the private diagnostics artifact for integration review; no original APK or binary game assets are uploaded."
   echo "The private artifact contains text diagnostics, the decoded manifest and selected integration smali files; no APK, textures, audio or other game assets are uploaded."
 } > "$REPORT"
 
@@ -151,7 +151,7 @@ cat "$OUT/xgs-pak-inventory.txt" >> "$REPORT"
 
  
 echo >> "$REPORT"
-echo "=== Verified XOX2 settings screen decode (structure only) ===" >> "$REPORT"
+echo "=== Verified XOX2 settings screen decode (structure + private source XML) ===" >> "$REPORT"
 SETTINGS_XML="$(find "$RUNNER_TEMP/xgs-ui-extracted" -type f -iname 'uisettingsscreen.xml' -print -quit)"
 if [[ -n "$SETTINGS_XML" && -x "${ABGTOOL:-}" ]]; then
   python3 - "$ABGTOOL" "$SETTINGS_XML" "$OUT/xox2-settings-structure.txt" <<'PYXOX'
@@ -159,6 +159,8 @@ import subprocess, sys, xml.etree.ElementTree as ET
 tool, source, output = sys.argv[1:]
 run = subprocess.run([tool, "xox", source], check=True, text=True, capture_output=True)
 root = ET.fromstring(run.stdout)
+with open(output.replace("xox2-settings-structure.txt", "xox2-settings-original.decoded.xml"), "w", encoding="utf-8") as decoded:
+    decoded.write(run.stdout)
 lines = ["Decoded XOX2 settings hierarchy (selected structural fields only)."]
 def walk(node, depth=0):
     tag = node.tag.rsplit("}", 1)[-1]
