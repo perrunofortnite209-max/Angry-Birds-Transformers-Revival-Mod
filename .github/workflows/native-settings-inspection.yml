@@ -1,0 +1,102 @@
+name: Native settings state and UI inspection
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/full-revival-mod]
+    paths:
+      - ".github/workflows/native-settings-inspection.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-revival-mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download original APK privately and extract native libraries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/private" "$RUNNER_TEMP/apk" "$RUNNER_TEMP/out"
+          gh release download game --repo "$GITHUB_REPOSITORY" --pattern "*.apk" --dir "$RUNNER_TEMP/private"
+          APK="$(find "$RUNNER_TEMP/private" -maxdepth 1 -name '*.apk' -print -quit)"
+          test -n "$APK"
+          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  $APK" | sha256sum -c -
+          python - "$APK" "$RUNNER_TEMP/apk" <<'PY'
+          import sys,zipfile
+          from pathlib import Path
+          apk,out=Path(sys.argv[1]),Path(sys.argv[2])
+          with zipfile.ZipFile(apk) as z:
+              for n in z.namelist():
+                  if n.endswith((".so",".dex")) or n=="AndroidManifest.xml":
+                      p=out/n
+                      p.parent.mkdir(parents=True,exist_ok=True)
+                      p.write_bytes(z.read(n))
+          PY
+      - name: Build pinned XOX2 decoder and extract UI XML
+        run: |
+          set -euo pipefail
+          git clone https://github.com/omonkeyz/angry-birds-go-rust.git "$RUNNER_TEMP/abgtool"
+          git -C "$RUNNER_TEMP/abgtool" checkout 7cd02d36d42b58b652fdc98848de08221d1a0469
+          cargo build --release --manifest-path "$RUNNER_TEMP/abgtool/abgtool/Cargo.toml"
+          ABG="$RUNNER_TEMP/abgtool/abgtool/target/release/abgtool"
+          mkdir -p "$RUNNER_TEMP/paks" "$RUNNER_TEMP/ui"
+          python - "$RUNNER_TEMP/private" "$RUNNER_TEMP/paks" <<'PY'
+          import sys,zipfile
+          from pathlib import Path
+          apk=next(Path(sys.argv[1]).glob("*.apk")); out=Path(sys.argv[2])
+          with zipfile.ZipFile(apk) as z:
+              for n in z.namelist():
+                  if n.lower().endswith(".pak"):
+                      b=z.read(n)
+                      if b[:4]==b"\x02KPX": (out/Path(n).name).write_bytes(b)
+          PY
+          for p in "$RUNNER_TEMP"/paks/*.pak; do
+            if python tools/xgs_kpx_v2.py list "$p" 2>/dev/null | grep -qi 'uisettingsscreen.xml'; then
+              "$ABG" unpack "$p" "$RUNNER_TEMP/ui"
+              break
+            fi
+          done
+          find "$RUNNER_TEMP/ui" -type f -iname '*.xml' -print0 | while IFS= read -r -d '' f; do
+            case "$(basename "$f" | tr '[:upper:]' '[:lower:]')" in
+              uisettingsscreen.xml|uifeatureconfigscreen.xml|uimapscreen.xml)
+                "$ABG" xox "$f" > "$RUNNER_TEMP/out/$(basename "$f").decoded.xml"
+                ;;
+            esac
+          done
+      - name: Map native state strings and Android activity references
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/apk" "$RUNNER_TEMP/out" <<'PY'
+          import re,sys
+          from pathlib import Path
+          root,out=Path(sys.argv[1]),Path(sys.argv[2])
+          needles=[b"FeatureConfigScreen",b"EScreen_FE_FeatureConfig",b"RateGameButtonTapped",b"EScreen_FE_Settings",b"ShowSettingsScreen",b"dismissFeatureConfigScreen",b"MOD SETTINGS",b"FeatureConfig"]
+          report=[]
+          for so in root.rglob("*.so"):
+              if "libABBS" not in so.name: continue
+              data=so.read_bytes()
+              strings=re.findall(rb"[\x20-\x7e]{5,}",data)
+              report.append(f"LIBRARY {so.relative_to(root)} bytes={len(data)}")
+              for n in needles:
+                  hits=[s.decode("ascii","replace") for s in strings if n.lower() in s.lower()]
+                  report.append(f"  {n.decode()}: {hits[:20]}")
+          (out/"native-state-strings.txt").write_text("\n".join(report)+"\n")
+          PY
+          find "$RUNNER_TEMP/apk" -type f -name '*.dex' -print > "$RUNNER_TEMP/out/dex-files.txt"
+          grep -RInaE 'FeatureConfigScreen|EScreen_FE_FeatureConfig|RateGameButtonTapped|EScreen_FE_Settings|ShowSettingsScreen|dismissFeatureConfigScreen' "$RUNNER_TEMP/apk" > "$RUNNER_TEMP/out/dex-matches.txt" || true
+      - name: Upload text-only inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-settings-inspection
+          path: ${{ runner.temp }}/out/
+          retention-days: 7
