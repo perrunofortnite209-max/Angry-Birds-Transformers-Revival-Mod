@@ -16,10 +16,13 @@ public class FindGraphicsSyncCalls extends GhidraScript {
         return s.contains("dopresent") || s.contains("dorender") ||
             s.contains("renderalleffects") || s.contains("cexplosionmanager") ||
             s.contains("cparticleeffectmanager") || s.contains("prepareframe") ||
-            s.contains("renderall") || s.contains("drawframe");
+            s.contains("renderall") || s.contains("drawframe") ||
+            s.contains("graphicssync") || s.contains("presentscene") ||
+            s.contains("insertgpufence") || s.contains("blockoncpu") ||
+            s.contains("iscpufence");
     }
     private void dumpFunction(PrintWriter w, Function fn) throws Exception {
-        w.println("\nFUNCTION "+fn.getName()+" @ "+fn.getEntryPoint()+
+        w.println("\\nFUNCTION "+fn.getName()+" @ "+fn.getEntryPoint()+
             " size="+fn.getBody().getNumAddresses());
         w.println("CALLERS:");
         for(Function f:fn.getCallingFunctions(monitor)) w.println("  "+f.getName()+" @ "+f.getEntryPoint());
@@ -57,18 +60,19 @@ public class FindGraphicsSyncCalls extends GhidraScript {
             w.println("Read-only graphics synchronization audit");
             w.println("Program: "+currentProgram.getName());
             w.println("Image base: "+currentProgram.getImageBase());
-            w.println("\n===== SYNC / WAIT IMPORTS AND FUNCTIONS ("+sync.size()+") =====");
+            w.println("\\n===== SYNC / WAIT IMPORTS AND FUNCTIONS ("+sync.size()+") =====");
             for(Function fn:sync) dumpFunction(w,fn);
-            w.println("\n===== RENDER / EFFECT FUNCTIONS ("+render.size()+") =====");
+            w.println("\\n===== RENDER / EFFECT / SYNC WRAPPERS ("+render.size()+") =====");
             for(Function fn:render) dumpFunction(w,fn);
-            w.println("\n===== FUNCTIONS THAT CALL SYNC / WAIT PRIMITIVES =====");
+            w.println("\\n===== FUNCTIONS THAT CALL SYNC / WAIT PRIMITIVES OR GRAPHICSSYNC =====");
             it=fm.getFunctions(true);
             while(it.hasNext()) {
                 Function fn=it.next();
                 for(Function callee:fn.getCalledFunctions(monitor)) {
-                    if(syncName(callee.getName())) {
+                    String cn=callee.getName().toLowerCase();
+                    if(syncName(callee.getName()) || cn.contains("graphicssync") || cn.contains("presentscene")) {
                         callers.add(fn);
-                        w.println("\nCALLER "+fn.getName()+" @ "+fn.getEntryPoint()+
+                        w.println("\\nCALLER "+fn.getName()+" @ "+fn.getEntryPoint()+
                             " -> "+callee.getName()+" @ "+callee.getEntryPoint());
                         InstructionIterator ii=currentProgram.getListing().getInstructions(fn.getBody(),true);
                         int c=0;
@@ -80,8 +84,8 @@ public class FindGraphicsSyncCalls extends GhidraScript {
                     }
                 }
             }
-            w.println("\nSummary: sync functions="+sync.size()+", render/effect functions="+render.size()+
-                ", functions calling sync primitives="+callers.size());
+            w.println("\\nSummary: sync functions="+sync.size()+", render/effect/sync functions="+render.size()+
+                ", functions calling sync primitives/wrappers="+callers.size());
             w.println("No binary modifications were made.");
         }
         println("Wrote graphics sync audit: "+out.getAbsolutePath());
