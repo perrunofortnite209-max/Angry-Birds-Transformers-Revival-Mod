@@ -1,0 +1,68 @@
+name: Build PAK-only diagnostic APK
+
+on:
+  push:
+    branches: [feature/full-revival-mod]
+    paths:
+      - ".github/workflows/build-pak-only-diagnostic.yml"
+      - "tools/build_pak_only_diagnostic.py"
+      - "tools/build_visual_test_apk.py"
+      - "tools/xgs_kpx_v2.py"
+      - "tools/xox2_codec.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pak-only-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-revival-mod
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          accept-android-sdk-licenses: true
+      - name: Install Android build tools
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'build-tools;35.0.0'
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+          python -m pip install --upgrade pip pillow
+      - name: Download and verify original APK
+        run: |
+          set -euo pipefail
+          mkdir -p input output
+          curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/com.rovio.angrybirdstransformers-24200.apk" -o input/original.apk
+          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  input/original.apk" | sha256sum -c -
+      - name: Patch only native game PAK resources
+        run: |
+          set -euo pipefail
+          python tools/build_pak_only_diagnostic.py --apk input/original.apk --out output/ABT-PAK-ONLY-DIAGNOSTIC-unsigned.apk --repo .
+      - name: Align, sign and verify
+        run: |
+          set -euo pipefail
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/abt-pak-test.jks" -storepass "temporary-test-password" -keypass "temporary-test-password" -alias abt-pak-test -dname "CN=ABT PAK Diagnostic,O=Community Mod,C=CL" -keyalg RSA -keysize 2048 -validity 10000
+          zipalign -f -p 4 output/ABT-PAK-ONLY-DIAGNOSTIC-unsigned.apk output/ABT-PAK-ONLY-DIAGNOSTIC-aligned.apk
+          apksigner sign --ks "$RUNNER_TEMP/abt-pak-test.jks" --ks-key-alias abt-pak-test --ks-pass pass:temporary-test-password --key-pass pass:temporary-test-password --out output/ABT-PAK-ONLY-DIAGNOSTIC.apk output/ABT-PAK-ONLY-DIAGNOSTIC-aligned.apk
+          apksigner verify --verbose output/ABT-PAK-ONLY-DIAGNOSTIC.apk
+          zipalign -c -v 4 output/ABT-PAK-ONLY-DIAGNOSTIC.apk
+      - name: Upload diagnostic APK and report
+        uses: actions/upload-artifact@v4
+        with:
+          name: abt-pak-only-diagnostic
+          path: |
+            output/ABT-PAK-ONLY-DIAGNOSTIC.apk
+            output/ABT-PAK-ONLY-DIAGNOSTIC.report.json
+          if-no-files-found: error
+          retention-days: 14
