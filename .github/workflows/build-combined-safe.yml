@@ -52,11 +52,18 @@ jobs:
           set -euo pipefail
           python tools/build_combined_safe_apk.py --apk input/original.apk --out output/ABT-REVIVAL-COMBINED-unsigned.apk --repo . --icon input/user-icon.png
       - name: Align, sign and verify
+        env:
+          ABT_SIGNING_KEY_BASE64: ${{ secrets.ABT_SIGNING_KEY_BASE64 }}
+          ABT_SIGNING_STORE_PASSWORD: ${{ secrets.ABT_SIGNING_STORE_PASSWORD }}
+          ABT_SIGNING_KEY_PASSWORD: ${{ secrets.ABT_SIGNING_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          keytool -genkeypair -v -keystore "$RUNNER_TEMP/abt-combined.jks" -storepass "temporary-test-password" -keypass "temporary-test-password" -alias abt-combined -dname "CN=ABT Revival Mod,O=Community Mod,C=CL" -keyalg RSA -keysize 2048 -validity 10000
+          test -n "$ABT_SIGNING_KEY_BASE64" || { echo "Falta el secreto ABT_SIGNING_KEY_BASE64"; exit 1; }
+          test -n "$ABT_SIGNING_STORE_PASSWORD" || { echo "Falta el secreto ABT_SIGNING_STORE_PASSWORD"; exit 1; }
+          test -n "$ABT_SIGNING_KEY_PASSWORD" || { echo "Falta el secreto ABT_SIGNING_KEY_PASSWORD"; exit 1; }
+          printf '%s' "$ABT_SIGNING_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/abt-revival-release.jks"
           zipalign -f -p 4 output/ABT-REVIVAL-COMBINED-unsigned.apk output/ABT-REVIVAL-COMBINED-aligned.apk
-          apksigner sign --ks "$RUNNER_TEMP/abt-combined.jks" --ks-key-alias abt-combined --ks-pass pass:temporary-test-password --key-pass pass:temporary-test-password --out output/Angry-Birds-Transformers-Revival-Mod.apk output/ABT-REVIVAL-COMBINED-aligned.apk
+          apksigner sign --ks "$RUNNER_TEMP/abt-revival-release.jks" --ks-key-alias abt-revival --ks-pass env:ABT_SIGNING_STORE_PASSWORD --key-pass env:ABT_SIGNING_KEY_PASSWORD --out output/Angry-Birds-Transformers-Revival-Mod.apk output/ABT-REVIVAL-COMBINED-aligned.apk
           apksigner verify --verbose output/Angry-Birds-Transformers-Revival-Mod.apk
           zipalign -c -v 4 output/Angry-Birds-Transformers-Revival-Mod.apk
           sha256sum output/Angry-Birds-Transformers-Revival-Mod.apk
