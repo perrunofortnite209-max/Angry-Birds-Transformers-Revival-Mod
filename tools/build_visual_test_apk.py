@@ -193,7 +193,8 @@ def patch_welcome(decoded, report):
     invoke-virtual {v0, v1}, Landroid/view/View;->findViewById(I)Landroid/view/View;
     move-result-object v4
     check-cast v4, Landroid/widget/FrameLayout;
-    invoke-virtual {v4}, Landroid/view/View;->getTag()Ljava/lang/Object;
+    const-string v0, "abt_revival_ball_view"
+    invoke-virtual {v4, v0}, Landroid/view/ViewGroup;->findViewWithTag(Ljava/lang/Object;)Landroid/view/View;
     move-result-object v0
     if-nez v0, :ball_done
     new-instance v5, Landroid/widget/TextView;
@@ -265,15 +266,13 @@ def patch_welcome(decoded, report):
     invoke-virtual {v4, v5, v0}, Landroid/view/ViewGroup;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V
     invoke-virtual {v5}, Landroid/view/View;->animate()Landroid/view/ViewPropertyAnimator;
     move-result-object v1
-    const/4 v2, 0x0
+    const v2, 0x3f0ccccd
     invoke-virtual {v1, v2}, Landroid/view/ViewPropertyAnimator;->alpha(F)Landroid/view/ViewPropertyAnimator;
     move-result-object v1
     const-wide/16 v2, 0x1388
     invoke-virtual {v1, v2, v3}, Landroid/view/ViewPropertyAnimator;->setDuration(J)Landroid/view/ViewPropertyAnimator;
     move-result-object v1
     invoke-virtual {v1}, Landroid/view/ViewPropertyAnimator;->start()V
-    const-wide/16 v2, 0x7530
-    invoke-virtual {v5, v1, v2, v3}, Landroid/view/View;->postDelayed(Ljava/lang/Runnable;J)Z
     :ball_done
     return-void
 .end method
@@ -377,7 +376,7 @@ def patch_welcome(decoded, report):
  return-void
 .end method
 .method public onTouch(Landroid/view/View;Landroid/view/MotionEvent;)Z
- .locals 7
+ .locals 10
  invoke-virtual {p2}, Landroid/view/MotionEvent;->getActionMasked()I
  move-result v0
  if-nez v0, :touch_move
@@ -441,11 +440,39 @@ def patch_welcome(decoded, report):
  :touch_drag_start
  const/4 v1, 0x1
  iput-boolean v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->moved:Z
+ invoke-virtual {p1}, Landroid/view/View;->getParent()Landroid/view/ViewParent;
+ move-result-object v5
+ check-cast v5, Landroid/view/View;
+ invoke-virtual {v5}, Landroid/view/View;->getWidth()I
+ move-result v6
+ invoke-virtual {p1}, Landroid/view/View;->getWidth()I
+ move-result v7
+ sub-int/2addr v6, v7
+ int-to-float v6, v6
+ const/4 v7, 0x0
+ invoke-static {v6, v7}, Ljava/lang/Math;->max(FF)F
+ move-result v6
  iget v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->startX:F
  add-float/2addr v1, v3
+ invoke-static {v1, v7}, Ljava/lang/Math;->max(FF)F
+ move-result v1
+ invoke-static {v1, v6}, Ljava/lang/Math;->min(FF)F
+ move-result v1
  invoke-virtual {p1, v1}, Landroid/view/View;->setX(F)V
+ invoke-virtual {v5}, Landroid/view/View;->getHeight()I
+ move-result v6
+ invoke-virtual {p1}, Landroid/view/View;->getHeight()I
+ move-result v8
+ sub-int/2addr v6, v8
+ int-to-float v6, v6
+ invoke-static {v6, v7}, Ljava/lang/Math;->max(FF)F
+ move-result v6
  iget v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->startY:F
  add-float/2addr v1, v4
+ invoke-static {v1, v7}, Ljava/lang/Math;->max(FF)F
+ move-result v1
+ invoke-static {v1, v6}, Ljava/lang/Math;->min(FF)F
+ move-result v1
  invoke-virtual {p1, v1}, Landroid/view/View;->setY(F)V
  :touch_consume_move
  const/4 v1, 0x1
@@ -458,12 +485,9 @@ def patch_welcome(decoded, report):
  iget-object v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
  invoke-virtual {v1}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->showRevivalSettings()V
  :touch_schedule
- iget-object v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->hideTask:Ljava/lang/Runnable;
- const-wide/16 v2, 0x7530
- invoke-virtual {p1, v1, v2, v3}, Landroid/view/View;->postDelayed(Ljava/lang/Runnable;J)Z
  invoke-virtual {p1}, Landroid/view/View;->animate()Landroid/view/ViewPropertyAnimator;
  move-result-object v1
- const/4 v2, 0x0
+ const v2, 0x3f0ccccd
  invoke-virtual {v1, v2}, Landroid/view/ViewPropertyAnimator;->alpha(F)Landroid/view/ViewPropertyAnimator;
  move-result-object v1
  const-wide/16 v2, 0x1388
@@ -502,8 +526,8 @@ def patch_welcome(decoded, report):
  move-result v1
  if-eqz v1, :hide_done
  iget-object v0, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallHideTask;->ball:Landroid/view/View;
- const/16 v1, 0x8
- invoke-virtual {v0, v1}, Landroid/view/View;->setVisibility(I)V
+ const v1, 0x3f0ccccd
+ invoke-virtual {v0, v1}, Landroid/view/View;->setAlpha(F)V
  :hide_done
  return-void
 .end method
