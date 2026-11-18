@@ -124,14 +124,14 @@ def patch_welcome(decoded, report):
         if re.search(r"^\.class\b.*"+re.escape(descriptor),s,re.M): hits.append((p,s))
     if len(hits)!=1: raise RuntimeError(f"Activity Rovio no encontrada de forma única: {len(hits)}")
     path, source=hits[0]
-    if "showRevivalWelcomeOnce()V" in source: raise RuntimeError("Helper de bienvenida ya presente")
+    if "showRevivalWelcomeOnce()V" in source or "showRevivalFloatingBallIfReady()V" in source: raise RuntimeError("Helpers Revival Mod ya presentes")
     pattern=re.compile(r"(?ms)^\.method[^\n]*\bonCreate\(Landroid/os/Bundle;\)V\b.*?^\.end method")
     match=pattern.search(source)
     if not match: raise RuntimeError("No se encontró onCreate(Bundle) en la Activity principal")
     method=match.group(0); returns=list(re.finditer(r"(?m)^\s*return-void\s*$",method))
     if not returns: raise RuntimeError("No se encontró return-void en onCreate")
     at=returns[-1].start()
-    method=method[:at]+f"    invoke-direct {{p0}}, {descriptor}->showRevivalWelcomeOnce()V\n"+method[at:]
+    method=method[:at]+f"    invoke-direct {{p0}}, {descriptor}->showRevivalWelcomeOnce()V\n    invoke-direct {{p0}}, {descriptor}->showRevivalFloatingBallIfReady()V\n"+method[at:]
     source=source[:match.start()]+method+source[match.end():]
     helper=r'''
 .method private showRevivalWelcomeOnce()V
@@ -165,8 +165,107 @@ def patch_welcome(decoded, report):
     return-void
 .end method
 '''
-    path.write_text(source+"\n"+helper,encoding="utf-8")
+    floating_helper=r"""
+.method private showRevivalFloatingBallIfReady()V
+    .locals 6
+    const-string v0, "abt_revival_mod"
+    const/4 v1, 0x0
+    invoke-virtual {p0, v0, v1}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
+    move-result-object v0
+    const-string v1, "ball_session_seen"
+    const/4 v2, 0x0
+    invoke-interface {v0, v1, v2}, Landroid/content/SharedPreferences;->getBoolean(Ljava/lang/String;Z)Z
+    move-result v2
+    if-nez v2, :ball_show
+    invoke-interface {v0}, Landroid/content/SharedPreferences;->edit()Landroid/content/SharedPreferences$Editor;
+    move-result-object v3
+    const/4 v2, 0x1
+    invoke-interface {v3, v1, v2}, Landroid/content/SharedPreferences$Editor;->putBoolean(Ljava/lang/String;Z)Landroid/content/SharedPreferences$Editor;
+    move-result-object v3
+    invoke-interface {v3}, Landroid/content/SharedPreferences$Editor;->apply()V
+    return-void
+    :ball_show
+    invoke-virtual {p0}, Landroid/app/Activity;->getWindow()Landroid/view/Window;
+    move-result-object v0
+    invoke-virtual {v0}, Landroid/view/Window;->getDecorView()Landroid/view/View;
+    move-result-object v0
+    const v1, 0x1020002
+    invoke-virtual {v0, v1}, Landroid/view/View;->findViewById(I)Landroid/view/View;
+    move-result-object v4
+    check-cast v4, Landroid/widget/FrameLayout;
+    invoke-virtual {v4}, Landroid/view/View;->getTag()Ljava/lang/Object;
+    move-result-object v0
+    if-nez v0, :ball_done
+    new-instance v5, Landroid/widget/TextView;
+    invoke-direct {v5, p0}, Landroid/widget/TextView;-><init>(Landroid/content/Context;)V
+    const-string v0, "MOD"
+    invoke-virtual {v5, v0}, Landroid/widget/TextView;->setText(Ljava/lang/CharSequence;)V
+    const/high16 v0, 0x41300000
+    invoke-virtual {v5, v0}, Landroid/widget/TextView;->setTextSize(F)V
+    const/4 v0, 0x1
+    invoke-virtual {v5, v0}, Landroid/widget/TextView;->setGravity(I)V
+    const/4 v0, -0x1
+    invoke-virtual {v5, v0}, Landroid/widget/TextView;->setTextColor(I)V
+    new-instance v0, Landroid/graphics/drawable/GradientDrawable;
+    invoke-direct {v0}, Landroid/graphics/drawable/GradientDrawable;-><init>()V
+    const/4 v1, 0x1
+    invoke-virtual {v0, v1}, Landroid/graphics/drawable/GradientDrawable;->setShape(I)V
+    const v1, -0xff5500
+    invoke-virtual {v0, v1}, Landroid/graphics/drawable/GradientDrawable;->setColor(I)V
+    invoke-virtual {v5, v0}, Landroid/view/View;->setBackground(Landroid/graphics/drawable/Drawable;)V
+    const/high16 v0, 0x41000000
+    invoke-virtual {v5, v0}, Landroid/view/View;->setElevation(F)V
+    new-instance v0, Landroid/widget/FrameLayout$LayoutParams;
+    const/16 v1, 0x38
+    const/16 v2, 0x38
+    const/16 v3, 0x15
+    invoke-direct {v0, v1, v2, v3}, Landroid/widget/FrameLayout$LayoutParams;-><init>(III)V
+    const/16 v1, 0x10
+    iput v1, v0, Landroid/widget/FrameLayout$LayoutParams;->rightMargin:I
+    new-instance v1, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallClickListener;
+    invoke-direct {v1, p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallClickListener;-><init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;)V
+    invoke-virtual {v5, v1}, Landroid/view/View;->setOnClickListener(Landroid/view/View$OnClickListener;)V
+    const-string v1, "abt_revival_ball"
+    invoke-virtual {v4, v1}, Landroid/view/View;->setTag(Ljava/lang/Object;)V
+    invoke-virtual {v4, v5, v0}, Landroid/view/ViewGroup;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V
+    :ball_done
+    return-void
+.end method
+"""
+    path.write_text(source+"\n"+helper+"\n"+floating_helper,encoding="utf-8")
+    listener=path.parent.parent/"smali/com/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallClickListener.smali"
+    listener.parent.mkdir(parents=True,exist_ok=True)
+    listener.write_text(r""".class public final Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallClickListener;
+.super Ljava/lang/Object;
+.implements Landroid/view/View$OnClickListener;
+
+.field private final activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+
+.method public constructor <init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;)V
+    .locals 0
+    invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+    iput-object p1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallClickListener;->activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+    return-void
+.end method
+
+.method public onClick(Landroid/view/View;)V
+    .locals 3
+    new-instance v0, Landroid/app/AlertDialog$Builder;
+    iget-object v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallClickListener;->activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
+    invoke-direct {v0, v1}, Landroid/app/AlertDialog$Builder;-><init>(Landroid/content/Context;)V
+    const-string v1, "MOD SETTINGS"
+    invoke-virtual {v0, v1}, Landroid/app/AlertDialog$Builder;->setTitle(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
+    const-string v1, "REVIVAL MOD\n\nFPS objetivo del motor: 144\n\nLa burbuja se habilita después de la primera sesión para no interferir con la descarga e instalación inicial."
+    invoke-virtual {v0, v1}, Landroid/app/AlertDialog$Builder;->setMessage(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
+    const-string v1, "CERRAR"
+    const/4 v2, 0x0
+    invoke-virtual {v0, v1, v2}, Landroid/app/AlertDialog$Builder;->setPositiveButton(Ljava/lang/CharSequence;Landroid/content/DialogInterface$OnClickListener;)Landroid/app/AlertDialog$Builder;
+    invoke-virtual {v0}, Landroid/app/AlertDialog$Builder;->show()Landroid/app/AlertDialog;
+    return-void
+.end method
+""".lstrip(),encoding="utf-8")
     report["welcome"]={"first_launch_only":True,"dismissible":True,"method":"Android AlertDialog + SharedPreferences"}
+    report["floating_ball"]={"enabled_after_first_app_session":True,"overlay_permission":False,"opens":"MOD SETTINGS dialog","pak_modified":False}
 
 def main():
     ap=argparse.ArgumentParser()
