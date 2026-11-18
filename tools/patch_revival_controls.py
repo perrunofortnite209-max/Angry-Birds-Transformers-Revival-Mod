@@ -227,6 +227,58 @@ def patch(decoded: Path, report: dict):
         pat=re.compile(r"(?ms)^\.method[^\n]*\b"+re.escape(name)+r".*?^\.end method\n?")
         source=pat.sub("",source)
     source += "\n"+main+"\n"+fps_dialog+"\n"+graphics_dialog+"\n"+apply_fps+"\n"+apply_graphics
+    restore_helper=r"""
+.method public applySavedRevivalSettings()V
+    .locals 5
+    const-string v0, "abt_revival_mod"
+    const/4 v1, 0x0
+    invoke-virtual {p0, v0, v1}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
+    move-result-object v0
+
+    const-string v1, "graphics_profile"
+    const/4 v2, -0x1
+    invoke-interface {v0, v1, v2}, Landroid/content/SharedPreferences;->getInt(Ljava/lang/String;I)I
+    move-result v2
+    if-ltz v2, :restore_fps
+    const/4 v3, 0x3
+    if-gt v2, v3, :restore_fps
+    invoke-static {v2}, Lcom/rovio/angrybirdstransformers/RevivalNative;->setGraphicsLevel(I)I
+
+    :restore_fps
+    const-string v1, "fps_limit"
+    const/4 v2, -0x1
+    invoke-interface {v0, v1, v2}, Landroid/content/SharedPreferences;->getInt(Ljava/lang/String;I)I
+    move-result v2
+    const/4 v3, -0x1
+    if-eq v2, v3, :restore_done
+    invoke-static {v2}, Lcom/rovio/angrybirdstransformers/RevivalNative;->setFps(I)I
+    :restore_done
+    return-void
+.end method
+"""
+    source += "\n"+restore_helper+"\n"
+
+    # Reapply saved settings once Android has resumed the game Activity.
+    resume_pattern=re.compile(r"(?ms)^\.method[^\n]*\bonResume\(\)V\b.*?^\.end method")
+    resume_match=resume_pattern.search(source)
+    if resume_match:
+        resume_method=resume_match.group(0)
+        if "applySavedRevivalSettings()V" not in resume_method:
+            super_call=re.search(r"(?m)^\s*invoke-super \{p0\}, .*->onResume\(\)V\s*$",resume_method)
+            if super_call:
+                pos=super_call.end()
+                resume_method=resume_method[:pos]+"\n    invoke-virtual {p0}, "+DESC+"->applySavedRevivalSettings()V"+resume_method[pos:]
+            else:
+                returns=list(re.finditer(r"(?m)^\s*return-void\s*$",resume_method))
+                if not returns: raise RuntimeError("onResume exists but has no return-void")
+                pos=returns[-1].start()
+                resume_method=resume_method[:pos]+"    invoke-virtual {p0}, "+DESC+"->applySavedRevivalSettings()V\n"+resume_method[pos:]
+            source=source[:resume_match.start()]+resume_method+source[resume_match.end():]
+    else:
+        super_match=re.search(r"(?m)^\.super\s+(\S+)",source)
+        super_desc=super_match.group(1) if super_match else "Landroid/app/Activity;"
+        source += "\n.method protected onResume()V\n    .locals 0\n    invoke-super {p0}, "+super_desc+"->onResume()V\n    invoke-virtual {p0}, "+DESC+"->applySavedRevivalSettings()V\n    return-void\n.end method\n"
+
     path.write_text(source,encoding="utf-8")
 
     smali_root=next((p for p in path.parents if p.name.startswith("smali")),None)
