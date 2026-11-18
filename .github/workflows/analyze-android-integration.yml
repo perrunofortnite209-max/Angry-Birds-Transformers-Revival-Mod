@@ -7,6 +7,7 @@ on:
       - ".github/workflows/analyze-android-integration.yml"
       - "tools/analyze_android_integration.sh"
       - "tools/extract_xgs_pak.py"
+      - "tools/summarize_xgs_ui.py"
   workflow_dispatch:
     inputs:
       release_tag:
