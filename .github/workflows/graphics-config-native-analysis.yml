@@ -6,7 +6,8 @@ on:
       - "tools/analyze_graphics_config_xrefs.py"
       - "tools/inspect_performance_profile_table.py"
       - "tools/trace_render_scale_references.py"
-      - "tools/trace_render_scale_globals.py"\n      - "tools/trace_explosion_hotspots.py"
+      - "tools/trace_render_scale_globals.py"
+      - "tools/trace_explosion_hotspots.py"
       - ".github/workflows/graphics-config-native-analysis.yml"
   workflow_dispatch:
 permissions:
@@ -49,6 +50,8 @@ jobs:
         run: python tools/trace_render_scale_references.py "$APK" "$RUNNER_TEMP/out/render-scale-reference-trace.txt"
       - name: Trace render-scale global references
         run: python tools/trace_render_scale_globals.py "$APK" "$RUNNER_TEMP/out/render-scale-global-references.txt"
+      - name: Trace explosion and particle hotspots
+        run: python tools/trace_explosion_hotspots.py "$APK" "$RUNNER_TEMP/out/explosion-particle-hotspots.txt"
       - name: Upload text report
         uses: actions/upload-artifact@v4
         with:
@@ -58,5 +61,6 @@ jobs:
             ${{ runner.temp }}/out/performance-profile-table.txt
             ${{ runner.temp }}/out/render-scale-reference-trace.txt
             ${{ runner.temp }}/out/render-scale-global-references.txt
+            ${{ runner.temp }}/out/explosion-particle-hotspots.txt
           if-no-files-found: error
           retention-days: 7
