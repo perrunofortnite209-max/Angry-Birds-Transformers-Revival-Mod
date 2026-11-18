@@ -53,7 +53,7 @@ def main():
  a=ap.parse_args(); a.out.parent.mkdir(parents=True,exist_ok=True)
  src=a.apk.read_bytes()
  if sha(src)!=EXPECTED: raise RuntimeError("El APK de entrada no coincide con el original 2.42.0 analizado")
- report={"method":"DEX transplant + runtime FPS/graphics JNI bridge + conservative VFX particle thresholds","target_fps":"user-selectable","pak_modified":True,"manifest_modified":True,"resources_modified":True,"icon_safe_scale":1.0,"icon_entries":[],"welcome_first_launch":True,"fps_patches":[],"native_fps_constants_modified":False,"fps_policy":"original engine defaults until a user-selected runtime cap is applied","vfx_policy":"lower particle-count thresholds for VFX config ID 5; visual effects are retained, but the engine can shed particle load earlier"}
+ report={"resources":[],"method":"DEX transplant + runtime FPS/graphics JNI bridge + conservative VFX particle thresholds","target_fps":"user-selectable","pak_modified":True,"manifest_modified":True,"resources_modified":True,"icon_safe_scale":1.0,"icon_entries":[],"welcome_first_launch":True,"fps_patches":[],"native_fps_constants_modified":False,"fps_policy":"original engine defaults until a user-selected runtime cap is applied","vfx_policy":"lower particle-count thresholds for VFX config ID 5; visual effects are retained, but the engine can shed particle load earlier"}
  visual=load_visual_helpers(a.repo.resolve())
  welcome=visual.patch_welcome
  controls=load_controls(a.repo.resolve())
