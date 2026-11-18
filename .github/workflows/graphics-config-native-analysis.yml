@@ -5,6 +5,7 @@ on:
     paths:
       - "tools/analyze_graphics_config_xrefs.py"
       - "tools/inspect_performance_profile_table.py"
+      - "tools/trace_render_scale_references.py"
       - ".github/workflows/graphics-config-native-analysis.yml"
   workflow_dispatch:
 permissions:
@@ -42,6 +43,8 @@ jobs:
         run: python tools/analyze_graphics_config_xrefs.py "$RUNNER_TEMP/native/libABBS-arm64.so" "$RUNNER_TEMP/out/graphics-config-xrefs.txt"
       - name: Resolve runtime performance profile names
         run: python tools/inspect_performance_profile_table.py "$RUNNER_TEMP/native/libABBS-arm64.so" "$RUNNER_TEMP/out/performance-profile-table.txt"
+      - name: Trace render scale function references
+        run: python tools/trace_render_scale_references.py "$APK" "$RUNNER_TEMP/out/render-scale-reference-trace.txt"
       - name: Upload text report
         uses: actions/upload-artifact@v4
         with:
@@ -49,5 +52,6 @@ jobs:
           path: |
             ${{ runner.temp }}/out/graphics-config-xrefs.txt
             ${{ runner.temp }}/out/performance-profile-table.txt
+            ${{ runner.temp }}/out/render-scale-reference-trace.txt
           if-no-files-found: error
           retention-days: 7
