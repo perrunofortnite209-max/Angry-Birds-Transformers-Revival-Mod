@@ -3,7 +3,7 @@
 All PAKs, manifest, resources and unrelated APK entries remain byte-identical.
 """
 from __future__ import annotations
-import argparse, hashlib, importlib.util, json, re, subprocess, sys, tempfile, zipfile
+import argparse, hashlib, importlib.util, io, json, re, subprocess, sys, tempfile, zipfile
 from pathlib import Path
 
 EXPECTED = "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013"
@@ -45,6 +45,15 @@ def patch_lib(path, data, report):
   if bytes(b[at:at+4])!=new: raise RuntimeError(f"Verificación fallida: {fn}")
   report["fps_patches"].append({"library":path,"function":fn,"offset":hex(at),"before":oldhex,"after":newhex,"verified":True})
  return bytes(b)
+def make_icon_payload(source_png, width, height):
+ from PIL import Image
+ src=Image.open(source_png).convert('RGBA')
+ canvas=Image.new('RGBA',(width,height),(0,0,0,255))
+ src.thumbnail((max(1,int(width*0.84)),max(1,int(height*0.84))),Image.Resampling.LANCZOS)
+ canvas.alpha_composite(src,((width-src.width)//2,(height-src.height)//2))
+ out=io.BytesIO(); canvas.save(out,format='PNG',optimize=False); return out.getvalue()
+def is_icon(n):
+ return bool(re.fullmatch(r'res/drawable(?:-(?:ldpi|mdpi|hdpi|xhdpi|xxhdpi|xxxhdpi))?/app_icon[.]png',n))
 def is_dex(n):
  x=Path(n).name
  return x=="classes.dex" or (x.startswith("classes") and x.endswith(".dex"))
@@ -53,11 +62,11 @@ def is_sig(n):
  return u.startswith("META-INF/") and (u.endswith((".RSA",".DSA",".EC",".SF")) or u=="META-INF/MANIFEST.MF")
 def main():
  ap=argparse.ArgumentParser()
- ap.add_argument("--apk",type=Path,required=True); ap.add_argument("--out",type=Path,required=True); ap.add_argument("--repo",type=Path,default=Path("."))
+ ap.add_argument("--apk",type=Path,required=True); ap.add_argument("--out",type=Path,required=True); ap.add_argument("--repo",type=Path,default=Path(".")); ap.add_argument("--icon",type=Path,required=True)
  a=ap.parse_args(); a.out.parent.mkdir(parents=True,exist_ok=True)
  src=a.apk.read_bytes()
  if sha(src)!=EXPECTED: raise RuntimeError("El APK de entrada no coincide con el original 2.42.0 analizado")
- report={"method":"DEX transplant + guarded native FPS patch","target_fps":144,"pak_modified":False,"manifest_modified":False,"resources_modified":False,"welcome_first_launch":True,"fps_patches":[]}
+ report={"method":"DEX transplant + guarded native FPS patch","target_fps":144,"pak_modified":False,"manifest_modified":False,"resources_modified":True,"icon_safe_scale":0.84,"icon_entries":[],"welcome_first_launch":True,"fps_patches":[]}
  welcome=load_patch(a.repo.resolve())
  with tempfile.TemporaryDirectory(prefix="abt-combined-") as td:
   td=Path(td); decoded=td/"decoded"; rebuilt=td/"rebuilt.apk"
@@ -71,17 +80,24 @@ def main():
    names=original.namelist()
    if any(names.count(p)!=1 for p in TARGETS): raise RuntimeError("Falta una biblioteca nativa o está duplicada")
    replacements={p:patch_lib(p,original.read(p),report) for p in TARGETS}
-   before={n:sha(original.read(n)) for n in names if not is_dex(n) and n not in TARGETS and not is_sig(n)}
+   icon_names=[n for n in names if is_icon(n)]
+   if len(icon_names)!=7: raise RuntimeError(f"Expected 7 launcher PNGs, found {len(icon_names)}: {icon_names}")
+   before={n:sha(original.read(n)) for n in names if not is_dex(n) and n not in TARGETS and not is_icon(n) and not is_sig(n)}
    with zipfile.ZipFile(a.out,"w") as out:
     for info in original.infolist():
      n=info.filename
      if is_sig(n): continue
      payload=dex[n] if is_dex(n) else replacements[n] if n in replacements else original.read(n)
+     if is_icon(n):
+      from PIL import Image
+      with Image.open(io.BytesIO(original.read(n))) as old_icon: w,h=old_icon.size
+      payload=make_icon_payload(a.icon,w,h)
+      report["icon_entries"].append({"path":n,"width":w,"height":h,"verified":True})
      out.writestr(info,payload)
   with zipfile.ZipFile(a.out) as check:
    bad=check.testzip()
    if bad: raise RuntimeError(f"ZIP dañado: {bad}")
-   after={n:sha(check.read(n)) for n in check.namelist() if not is_dex(n) and n not in TARGETS and not is_sig(n)}
+   after={n:sha(check.read(n)) for n in check.namelist() if not is_dex(n) and n not in TARGETS and not is_icon(n) and not is_sig(n)}
    if before!=after: raise RuntimeError("Cambió una entrada ajena a DEX/libABBS")
    for p in TARGETS:
     for fn,sig,off,old,new in TARGETS[p]:
@@ -89,7 +105,7 @@ def main():
      # Each target instruction was verified before writing; report includes exact resulting bytes.
      match=next(x for x in report["fps_patches"] if x["library"]==p and x["function"]==fn)
      if entry[int(match["offset"],16):int(match["offset"],16)+4]!=bytes.fromhex(new): raise RuntimeError(f"FPS patch no persistió: {fn}")
-   report["unchanged_entries"]=len(before); report["pak_and_unrelated_entries_sha256_identical"]=True; report["apk_zip_test"]="passed"
+   report["unchanged_entries"]=len(before); report["pak_and_unrelated_entries_sha256_identical"]=True; report["only_resource_changes_are_launcher_icon_pngs"]=True; report["apk_zip_test"]="passed"
  report["output_sha256"]=sha(a.out.read_bytes()); report["output_size"]=a.out.stat().st_size
  rp=a.out.parent/"ABT-REVIVAL-COMBINED.report.json"; rp.write_text(json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
  print(json.dumps(report,indent=2,ensure_ascii=False))
