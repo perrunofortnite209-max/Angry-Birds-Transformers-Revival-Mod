@@ -63,3 +63,5 @@ jobs:
           name: native-ui-fps-analysis
           path: ${{ runner.temp }}/out/
           retention-days: 7
+
+# Trigger native analysis workflow after adding the analyzer.
