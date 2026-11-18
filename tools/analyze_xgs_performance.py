@@ -16,6 +16,18 @@ CATEGORIES = {
     "streaming": re.compile(r"stream|compress|load|unload|gc|garbage", re.I),
     "engine": re.compile(r"deviceconfig|xgs", re.I),
 }
+FOCUS = [
+    re.compile(p, re.I) for p in (
+        r"CApp.*ProcessFrame",
+        r"CGame.*RenderFrame",
+        r"CRenderManager.*RenderFrame",
+        r"CApp.*DoPresent",
+        r"CApp.*GetDesiredFramerate",
+        r"CDeviceConfig.*GetDesiredFramerate",
+        r"LimitFPSWithSleep",
+        r"ExientGLSurfaceView|nativeDrawFrame",
+    )
+]
 
 def main():
     ap = argparse.ArgumentParser()
@@ -69,25 +81,33 @@ def main():
             md = Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN)
             text = textsec.data()
             base = int(textsec.header.sh_addr)
-            selected = [
-                item for item in ranked
-                if ("frame_pacing" in item[3] or "rendering" in item[3])
-                and base <= item[0] < base + len(text)
-            ][:24]
-            lines.append("\nBOUNDED DISASSEMBLY SAMPLE (up to 24 functions, 0x180 bytes each):")
-            console.append("\nDisassembly sample (up to 8 frame/render candidates, 0x80 bytes each):")
-            for idx, (addr, name, size, cats) in enumerate(selected):
-                lines.append(f"\nFUNCTION {name} @0x{addr:x} size=0x{size:x} categories={','.join(cats)}")
+            all_symbols = [(addr, name, size, cats) for (addr, name), (size, cats) in symbols.items()]
+            selected = []
+            used = set()
+            for pattern in FOCUS:
+                match = next((item for item in all_symbols
+                              if pattern.search(item[1]) and base <= item[0] < base + len(text)), None)
+                if match and (match[0], match[1]) not in used:
+                    selected.append(match)
+                    used.add((match[0], match[1]))
+            for item in ranked:
+                if len(selected) >= 8:
+                    break
+                if ("frame_pacing" in item[3] or "rendering" in item[3]) and base <= item[0] < base + len(text) and (item[0], item[1]) not in used:
+                    selected.append(item)
+                    used.add((item[0], item[1]))
+            lines.append("\nFOCUSED DISASSEMBLY (up to 8 functions, 0x300 bytes each):")
+            console.append("\nFocused disassembly (up to 8 functions, 0x300 bytes each):")
+            for addr, name, size, cats in selected:
+                header = f"\n{name} @0x{addr:x} size=0x{size:x} [{','.join(cats)}]"
+                lines.append(header)
+                console.append(header)
                 off = addr - base
-                instructions = list(md.disasm(text[off:off + min(size, 0x180)], addr))
+                instructions = list(md.disasm(text[off:off + min(size, 0x300)], addr))
                 for ins in instructions:
-                    lines.append(f"  {ins.address:08x}: {ins.mnemonic:8} {ins.op_str}")
-                if idx < 8:
-                    console.append(f"\n{name} @0x{addr:x} size=0x{size:x} [{','.join(cats)}]")
-                    for ins in instructions:
-                        if ins.address >= addr + 0x80:
-                            break
-                        console.append(f"  {ins.address:08x}: {ins.mnemonic:8} {ins.op_str}")
+                    row = f"  {ins.address:08x}: {ins.mnemonic:8} {ins.op_str}"
+                    lines.append(row)
+                    console.append(row)
         else:
             lines.append("WARNING: .text section not found")
             console.append("WARNING: .text section not found")
@@ -95,5 +115,6 @@ def main():
     args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"Wrote {len(lines)} lines; {len(symbols)} unique matching symbols")
     print("\n".join(console))
+
 if __name__ == "__main__":
     main()
