@@ -16,9 +16,7 @@ jobs:
         run: |
           curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/abt-explosion-trace.pftrace" -o abt.pftrace
           test -s abt.pftrace
-          echo "Trace SHA256:"
           sha256sum abt.pftrace
-          echo "Trace size:"
           stat -c '%s bytes' abt.pftrace
 
       - name: Install trace processor client
@@ -31,51 +29,33 @@ jobs:
           cat > analyze.py <<'PY'
           from perfetto.trace_processor import TraceProcessor
           from pathlib import Path
-
           out = []
-          def run(sql):
-              return tp.query(sql).as_pandas_dataframe()
-
           def section(title, df):
-              out.append("\\n## " + title + "\\n")
-              if df is None or len(df.index) == 0:
-                  out.append("(sin datos)\\n")
-              else:
-                  out.append(df.to_string(index=False) + "\\n")
-
+              out.append("\n## " + title + "\n")
+              out.append("(sin datos)\n" if df is None or len(df.index) == 0 else df.to_string(index=False) + "\n")
           tp = TraceProcessor(trace="abt.pftrace")
           queries = [
-            ("Trace stats", "SELECT name, value FROM stats ORDER BY name"),
-            ("Trace duration", "SELECT ROUND((MAX(ts+dur)-MIN(ts))/1e9,2) AS span_seconds, COUNT(*) AS slices FROM slice WHERE dur>0"),
-            ("Game draw-frame timing", """SELECT COUNT(*) AS frames, ROUND(AVG(dur)/1e6,2) AS avg_ms, ROUND(MAX(dur)/1e6,2) AS max_ms, SUM(CASE WHEN dur>16666667 THEN 1 ELSE 0 END) AS over_16_7ms, SUM(CASE WHEN dur>33333333 THEN 1 ELSE 0 END) AS over_33_3ms, SUM(CASE WHEN dur>50000000 THEN 1 ELSE 0 END) AS over_50ms FROM slice WHERE name='onDrawFrame' AND dur>0"""),
-            ("20 slowest game frames", """SELECT ROUND(dur/1e6,2) AS frame_ms, ts, id, track_id FROM slice WHERE name='onDrawFrame' AND dur>0 ORDER BY dur DESC LIMIT 20"""),
-            ("GLThread scheduler states", """SELECT th.name AS thread, st.state, COUNT(*) AS intervals, ROUND(SUM(st.dur)/1e9,3) AS seconds, ROUND(MAX(st.dur)/1e6,3) AS max_ms, GROUP_CONCAT(DISTINCT st.blocked_function) AS blocked_functions FROM thread_state st JOIN thread th USING(utid) WHERE th.name LIKE 'GLThread%' GROUP BY th.name,st.state ORDER BY SUM(st.dur) DESC"""),
-            ("CPU running overlap in slow frames", """WITH slow AS (SELECT id,ts,dur,track_id FROM slice WHERE name='onDrawFrame' AND dur>16666667) SELECT ROUND(p.dur/1e6,2) AS frame_ms,p.ts,ROUND(SUM(MAX(0,MIN(sc.ts+sc.dur,p.ts+p.dur)-MAX(sc.ts,p.ts)))/1e6,3) AS running_ms,COUNT(sc.ts) AS sched_intervals,GROUP_CONCAT(DISTINCT sc.cpu) AS cpus FROM slow p JOIN thread_track tt ON tt.id=p.track_id LEFT JOIN sched sc ON sc.utid=tt.utid AND sc.ts<p.ts+p.dur AND sc.ts+sc.dur>p.ts GROUP BY p.id ORDER BY p.dur DESC LIMIT 60"""),
-            ("Scheduler states overlapping slow frames", """WITH slow AS (SELECT id,ts,dur,track_id FROM slice WHERE name='onDrawFrame' AND dur>16666667) SELECT ROUND(p.dur/1e6,2) AS frame_ms,p.ts,st.state,COUNT(*) AS intervals,ROUND(SUM(MAX(0,MIN(st.ts+st.dur,p.ts+p.dur)-MAX(st.ts,p.ts)))/1e6,3) AS overlap_ms,GROUP_CONCAT(DISTINCT st.blocked_function) AS blocked FROM slow p JOIN thread_track tt ON tt.id=p.track_id JOIN thread_state st ON st.utid=tt.utid AND st.ts<p.ts+p.dur AND st.ts+st.dur>p.ts GROUP BY p.id,st.state ORDER BY p.dur DESC,overlap_ms DESC"""),
-            ("Top slices", """SELECT name,COUNT(*) AS events,ROUND(SUM(dur)/1e9,3) AS total_seconds,ROUND(MAX(dur)/1e6,3) AS max_ms FROM slice WHERE dur>=0 GROUP BY name ORDER BY SUM(dur) DESC LIMIT 80"""),
-            ("Chromium/WebView/GPU/ANGLE/Viz slices", """SELECT name,COUNT(*) AS events,ROUND(SUM(dur)/1e9,3) AS total_seconds,ROUND(MAX(dur)/1e6,3) AS max_ms FROM slice WHERE dur>=0 AND (LOWER(name) LIKE '%gpu%' OR LOWER(name) LIKE '%angle%' OR LOWER(name) LIKE '%viz%' OR LOWER(name) LIKE '%compositor%' OR LOWER(name) LIKE '%webview%' OR LOWER(name) LIKE '%chromium%' OR LOWER(name) LIKE '%egl%' OR LOWER(name) LIKE '%fence%' OR LOWER(name) LIKE '%swap%') GROUP BY name ORDER BY SUM(dur) DESC LIMIT 120"""),
-            ("Explosion/particle/physics slices", """SELECT name,COUNT(*) AS events,ROUND(SUM(dur)/1e9,3) AS total_seconds,ROUND(MAX(dur)/1e6,3) AS max_ms FROM slice WHERE dur>=0 AND (LOWER(name) LIKE '%explos%' OR LOWER(name) LIKE '%particle%' OR LOWER(name) LIKE '%effect%' OR LOWER(name) LIKE '%damage%' OR LOWER(name) LIKE '%projectile%' OR LOWER(name) LIKE '%physics%') GROUP BY name ORDER BY SUM(dur) DESC LIMIT 100"""),
-            ("Frame miss counters", """SELECT t.name,COUNT(*) AS samples,SUM(CASE WHEN c.value>0 THEN 1 ELSE 0 END) AS nonzero,ROUND(AVG(c.value),3) AS average,MAX(c.value) AS maximum FROM counter c JOIN counter_track t ON t.id=c.track_id WHERE t.name LIKE '%PrevFrameMissed%' OR t.name LIKE '%PrevGpuFrameMissed%' OR t.name LIKE '%PrevHwcFrameMissed%' GROUP BY t.name"""),
-            ("GPU-related tables exposed in trace", "SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE '%gpu%' OR name LIKE '%fence%' OR name LIKE '%sync%' OR name LIKE '%frame_timeline%') ORDER BY name"),
-            ("Frame timeline tracks", "SELECT name,COUNT(*) AS events FROM slice WHERE LOWER(name) LIKE '%frame%' OR LOWER(name) LIKE '%jank%' GROUP BY name ORDER BY COUNT(*) DESC LIMIT 100")
+            ("Frame summary", """SELECT COUNT(*) frames,ROUND(AVG(dur)/1e6,2) avg_ms,ROUND(MAX(dur)/1e6,2) max_ms,SUM(dur>16666667) over_16_7ms,SUM(dur>33333333) over_33_3ms FROM slice WHERE name='onDrawFrame' AND dur>0"""),
+            ("GPU completion waits by thread", """SELECT th.name thread,s.name,COUNT(*) events,ROUND(SUM(s.dur)/1e9,3) total_s,ROUND(AVG(s.dur)/1e6,3) avg_ms,ROUND(MAX(s.dur)/1e6,3) max_ms FROM slice s LEFT JOIN thread_track tt ON tt.id=s.track_id LEFT JOIN thread th ON th.utid=tt.utid WHERE LOWER(s.name) LIKE '%waiting for gpu completion%' GROUP BY th.name,s.name ORDER BY SUM(s.dur) DESC LIMIT 80"""),
+            ("GPU wait overlap with slow frames", """WITH slow AS (SELECT id,ts,dur,track_id FROM slice WHERE name='onDrawFrame' AND dur>16666667), waits AS (SELECT id,ts,dur,track_id,name FROM slice WHERE LOWER(name) LIKE '%waiting for gpu completion%') SELECT ROUND(f.dur/1e6,2) frame_ms,ROUND(w.dur/1e6,3) wait_ms,ROUND(MAX(0,MIN(f.ts+f.dur,w.ts+w.dur)-MAX(f.ts,w.ts))/1e6,3) overlap_ms,w.name,th.name thread FROM slow f JOIN waits w ON w.ts<f.ts+f.dur AND w.ts+w.dur>f.ts LEFT JOIN thread_track tt ON tt.id=w.track_id LEFT JOIN thread th ON th.utid=tt.utid ORDER BY f.dur DESC LIMIT 150"""),
+            ("Slowest frames and GL thread states", """WITH slow AS (SELECT id,ts,dur,track_id FROM slice WHERE name='onDrawFrame' AND dur>16666667) SELECT ROUND(f.dur/1e6,2) frame_ms,st.state,ROUND(SUM(MAX(0,MIN(st.ts+st.dur,f.ts+f.dur)-MAX(st.ts,f.ts)))/1e6,3) overlap_ms,COUNT(*) intervals FROM slow f JOIN thread_track tt ON tt.id=f.track_id JOIN thread_state st ON st.utid=tt.utid AND st.ts<f.ts+f.dur AND st.ts+st.dur>f.ts GROUP BY f.id,st.state ORDER BY f.dur DESC,overlap_ms DESC LIMIT 120"""),
+            ("Fence and sync slices", """SELECT name,COUNT(*) events,ROUND(SUM(dur)/1e9,3) total_s,ROUND(MAX(dur)/1e6,3) max_ms FROM slice WHERE dur>0 AND (LOWER(name) LIKE '%fence%' OR LOWER(name) LIKE '%sync%' OR LOWER(name) LIKE '%gpu completion%' OR LOWER(name) LIKE '%egl%' OR LOWER(name) LIKE '%swap%') GROUP BY name ORDER BY SUM(dur) DESC LIMIT 120"""),
+            ("GPU counters", """SELECT t.name,COUNT(*) samples,ROUND(MIN(c.value),3) min_value,ROUND(AVG(c.value),3) avg_value,ROUND(MAX(c.value),3) max_value FROM counter c JOIN counter_track t ON t.id=c.track_id WHERE LOWER(t.name) LIKE '%gpu%' GROUP BY t.name ORDER BY t.name LIMIT 100"""),
+            ("Thread inventory", """SELECT th.name,th.tid,COUNT(*) slices,ROUND(SUM(s.dur)/1e9,3) slice_s FROM thread th JOIN thread_track tt ON tt.utid=th.utid LEFT JOIN slice s ON s.track_id=tt.id WHERE th.name LIKE '%GLThread%' OR th.name LIKE '%RenderThread%' OR th.name LIKE '%Rovio%' GROUP BY th.utid ORDER BY slice_s DESC LIMIT 80""")
           ]
-
-          for title, sql in queries:
-              try:
-                  section(title, run(sql))
-              except Exception as e:
-                  out.append("\\n## " + title + "\\nQuery unavailable: " + str(e) + "\\n")
-
-          report = "# Angry Birds Transformers - Latest explosion Perfetto analysis\\n\\n" + "".join(out)
-          Path("abt-trace-report.md").write_text(report)
+          for title,sql in queries:
+              try: section(title,tp.query(sql).as_pandas_dataframe())
+              except Exception as e: out.append("\n## "+title+"\nQuery unavailable: "+str(e)+"\n")
+          report="# ABT GPU wait deep-dive\n"+"".join(out)
+          Path("abt-gpu-wait-deep-dive.md").write_text(report)
           print(report)
           tp.close()
           PY
           python analyze.py
 
-      - name: Upload analysis report
+      - name: Upload deep-dive report
         uses: actions/upload-artifact@v4
         with:
-          name: abt-explosion-perfetto-analysis
-          path: abt-trace-report.md
+          name: abt-gpu-wait-deep-dive
+          path: abt-gpu-wait-deep-dive.md
           retention-days: 7
