@@ -37,18 +37,24 @@ static int current_graphics(uintptr_t base) {
 }
 static int set_graphics(uintptr_t base, int target) {
     if (target < 0 || target > 3) return -1;
-    // Use the game's own ChangePerformance(direction) entry point.
-    // It validates the transition, loads the selected XML profile, updates
-    // the current-performance global, resets FPS profiling and notifies
-    // the renderer/scene using the exact native sequence used by the game.
+    // ChangePerformance() treats m_eCurrentPerformance as a sentinel-based
+    // enum and applies its own +/- bounds. Calling it with a direction from
+    // the raw value can reject a perfectly valid direct profile selection.
+    // Seed the requested enum, then invoke the game's native "step down"
+    // path: its internal (current + 1) - 1 resolves back to exactly target.
+    // This still performs the real XML load, resets FPS profiling, updates
+    // the player preference and requests a save through the game's code.
     using ChangePerformance = int (*)(int);
     auto change = reinterpret_cast<ChangePerformance>(base + 0x6ed4b8);
-    const int current = current_graphics(base);
-    if (current == target) return target + 1;
-    const int direction = target > current ? 1 : -1;
-    if (!change(direction)) return -2;
+    auto current = reinterpret_cast<volatile int *>(base + 0xcf9908); // CDeviceConfig::m_eCurrentPerformance
+    const int previous = *current;
+    if (previous == target) return target + 1;
+    *current = target;
+    const int applied = change(-1);
     const int updated = current_graphics(base);
-    return updated == current + direction ? updated + 1 : -3;
+    if (applied && updated == target) return updated + 1;
+    *current = previous;
+    return applied ? -3 : -2;
 }
 
 } // namespace
