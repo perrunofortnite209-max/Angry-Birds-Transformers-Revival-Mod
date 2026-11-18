@@ -56,8 +56,8 @@ jobs:
           keytool -genkeypair -v -keystore "$RUNNER_TEMP/abt-pak-test.jks" -storepass "temporary-test-password" -keypass "temporary-test-password" -alias abt-pak-test -dname "CN=ABT PAK Diagnostic,O=Community Mod,C=CL" -keyalg RSA -keysize 2048 -validity 10000
           zipalign -f -p 4 output/ABT-VFX-OPTIMIZED-unsigned.apk output/ABT-VFX-OPTIMIZED-aligned.apk
           apksigner sign --ks "$RUNNER_TEMP/abt-pak-test.jks" --ks-key-alias abt-pak-test --ks-pass pass:temporary-test-password --key-pass pass:temporary-test-password --out output/ABT-VFX-OPTIMIZED.apk output/ABT-VFX-OPTIMIZED-aligned.apk
-          apksigner verify --verbose output/ABT-PAK-ONLY-DIAGNOSTIC.apk
-          zipalign -c -v 4 output/ABT-PAK-ONLY-DIAGNOSTIC.apk
+          apksigner verify --verbose output/ABT-VFX-OPTIMIZED.apk
+          zipalign -c -v 4 output/ABT-VFX-OPTIMIZED.apk
       - name: Upload diagnostic APK and report
         uses: actions/upload-artifact@v4
         with:
