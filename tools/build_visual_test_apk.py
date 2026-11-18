@@ -45,7 +45,7 @@ def patch_features(xml):
                                             "onScreen": "true", "displayName": title})
     return ET.tostring(root, encoding="unicode", short_empty_elements=True)
 
-def patch_paks(apk, output, root, report):
+def patch_paks(apk, output, root, report, include=("settings", "features")):
     kpx = load_module(root / "tools/xgs_kpx_v2.py", "xgs_kpx_v2")
     codec = load_module(root / "tools/xox2_codec.py", "xox2_codec")
     with zipfile.ZipFile(apk) as zin:
@@ -61,11 +61,13 @@ def patch_paks(apk, output, root, report):
                     found["settings"].append((name, blob, meta, e))
                 if low.endswith("featureconfig.xml") and "uifeatureconfigscreen" not in low:
                     found["features"].append((name, blob, meta, e))
-        for kind in found:
+        for kind in include:
             if len(found[kind]) != 1:
                 raise RuntimeError(f"Recurso {kind}: se esperaba 1 coincidencia, hay {[(x[0],x[3].name) for x in found[kind]]}")
         replacements = {}
         for kind, patcher in (("settings", patch_settings), ("features", patch_features)):
+            if kind not in include:
+                continue
             pak, blob, meta, entry = found[kind][0]
             original = kpx.unpack_entry(blob, meta, entry)
             xml = codec.decode(original); ET.fromstring(xml)
