@@ -1,0 +1,46 @@
+name: XGS render-pass static inspection (read-only)
+
+on:
+  push:
+    branches: [feature/full-revival-mod]
+    paths:
+      - "tools/analyze_xgs_render_passes.py"
+      - ".github/workflows/xgs-render-pass-inspection.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-revival-mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install disassembly dependencies
+        run: python -m pip install pyelftools capstone
+      - name: Download and verify original APK privately
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p private-input reports
+          gh release download game --repo "$GITHUB_REPOSITORY" --pattern "*.apk" --dir private-input
+          mapfile -t APKS < <(find private-input -maxdepth 1 -type f -name '*.apk')
+          test "${#APKS[@]}" -eq 1
+          echo "APK_FILE=${APKS[0]}" >> "$GITHUB_ENV"
+          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  ${APKS[0]}" | sha256sum -c -
+      - name: Inspect render pass call graph and instructions
+        run: python tools/analyze_xgs_render_passes.py "$APK_FILE" reports/XGS_RENDER_PASS_INSPECTION.md
+      - name: Upload text report
+        uses: actions/upload-artifact@v4
+        with:
+          name: xgs-render-pass-static-inspection
+          path: reports/XGS_RENDER_PASS_INSPECTION.md
+          if-no-files-found: error
+          retention-days: 14
