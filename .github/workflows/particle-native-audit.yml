@@ -1,0 +1,42 @@
+name: Audit native particle and explosion paths
+
+on:
+  push:
+    branches: [feature/full-revival-mod]
+    paths:
+      - ".github/workflows/particle-native-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/full-revival-mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install read-only ELF analysis tools
+        run: python -m pip install --disable-pip-version-check pyelftools capstone
+      - name: Download and verify original 2.42.0 APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/com.rovio.angrybirdstransformers-24200.apk" -o original.apk
+          echo "ace138aac9456b81432a59b0f1ee9b475d20b0d5cffd4664fc5e4b74d0772013  original.apk" | sha256sum -c -
+      - name: Trace explosion and particle hotspots
+        run: |
+          python tools/trace_explosion_hotspots.py original.apk output/explosion-hotspots.txt
+          python tools/trace_particle_manager_detail.py original.apk output/particle-manager.txt
+      - name: Upload static native audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: abt-native-particle-audit
+          path: output/
+          if-no-files-found: error
+          retention-days: 14
