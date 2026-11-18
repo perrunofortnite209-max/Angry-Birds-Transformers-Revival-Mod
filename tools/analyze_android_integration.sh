@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Exient XGS PAK research: inspect real APK headers before selecting XPK1/XPK2 extraction.
+# Public format reference: https://github.com/WerWolv/ImHex-Patterns/blob/master/patterns/xgspak.hexpat
 set -euo pipefail
 [[ $# -eq 2 && -f "$1" ]] || { echo "Uso: $0 APK REPORT_DIR" >&2; exit 2; }
 APK="$1"
