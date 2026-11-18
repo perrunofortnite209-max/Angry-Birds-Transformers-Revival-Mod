@@ -39,6 +39,7 @@ TARGETS = [
     ("CXGSRenderTargetOGL::Activate", re.compile(r"_ZN19CXGSRenderTargetOGL8ActivateEv$")),
     ("CXGSDisplayOGL::PresentScene", re.compile(r"_ZN14CXGSDisplayOGL12PresentSceneEi$")),
     ("CApp::ResetViewport", re.compile(r"_ZN4CApp13ResetViewportEv$")),
+    ("CApp::ProcessFrame", re.compile(r"_ZN4CApp12ProcessFrameEv$")),
     ("CParticleEffectManager::PrepareFrame", re.compile(r"_ZN22CParticleEffectManager12PrepareFrameEv$")),
     ("CEnvObject::PrepareFrame", re.compile(r"_ZN11CEnvObject12PrepareFrameEv$")),
     ("C2DBatchControllerByMaterial::OnEndFrame", re.compile(r"_ZN28C2DBatchControllerByMaterial10OnEndFrameEv$")),
