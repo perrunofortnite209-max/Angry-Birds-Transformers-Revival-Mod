@@ -29,56 +29,7 @@ REPORT="$OUT/android-integration-report.txt"
   echo
   echo "=== Game asset path hints (names only) ==="
   find "$DECODE/assets" "$DECODE/res" -type f 2>/dev/null |
-    grep -iE '/[^/]*(menu|ui|interface|button|settings|font|screen)[^/]*  find "$DECODE" -type f -name '*.smali' -print0 |
-    xargs -0 grep -lE 'UnityPlayerActivity|GameActivity|NativeActivity|SurfaceView|GLSurfaceView|onCreate\(|onResume\(|Choreographer|setFrameRate' 2>/dev/null |
-    sed "s#^$DECODE/##" | head -n 240 || true
-  echo
-  echo "=== Lifecycle and rendering API references ==="
-  find "$DECODE" -type f -name '*.smali' -print0 |
-    xargs -0 grep -nE 'Landroid/view/Surface;->setFrameRate|Landroid/view/Window;->setPreferredRefreshRate|Landroid/view/Choreographer;|Landroid/view/SurfaceView;|Landroid/opengl/GLSurfaceView;' 2>/dev/null |
-    head -n 240 || true
-  echo
-  echo "=== Selected integration smali (reviewable source excerpts) ==="
-  mkdir -p "$OUT/integration-smali"
-  for rel in \
-    "smali_classes5/com/rovio/angrybirdstransformers/AngryBirdsTransformersActivity.smali" \
-    "smali/com/exient/ExientGLSurfaceView.smali" \
-    "smali/com/exient/XGS/XGSActivity.smali"; do
-    if [[ -f "$DECODE/$rel" ]]; then
-      mkdir -p "$OUT/integration-smali/$(dirname "$rel")"
-      cp "$DECODE/$rel" "$OUT/integration-smali/$rel"
-      echo "Included: $rel"
-    else
-      echo "Not found: $rel"
-    fi
-  done
-  # Locate engine activity/renderer classes by basename because apktool may place
-  # them in a multidex smali directory that differs between APK revisions.
-  for name in ExientActivity.smali 'ExientGLSurfaceView$Renderer.smali'; do
-    while IFS= read -r found; do
-      rel="${found#"$DECODE"/}"
-      mkdir -p "$OUT/integration-smali/$(dirname "$rel")"
-      cp "$found" "$OUT/integration-smali/$rel"
-      echo "Included: $rel"
-    done < <(find "$DECODE" -type f -name "$name" -print)
-  done
-  echo
-  echo "=== Engine activity and GL renderer integration references ==="
-  find "$DECODE" -type f \( -name 'ExientActivity.smali' -o -name 'ExientGLSurfaceView$Renderer.smali' \) -print0 |
-    xargs -0 grep -nE '^\\.method|onCreate|onResume|onPause|setContentView|addContentView|addView|ExientGLSurfaceView|setRenderer|onDrawFrame|eglSwapBuffers|setFrameRate|LimitFPS|GetDesiredFramerate' 2>/dev/null |
-    head -n 300 || true
-  echo
-  echo "=== Main activity lifecycle, view creation and layout references ==="
-  ACTIVITY="$DECODE/smali_classes5/com/rovio/angrybirdstransformers/AngryBirdsTransformersActivity.smali"
-  if [[ -f "$ACTIVITY" ]]; then
-    grep -nE '^\.method|onCreate|onResume|onPause|setContentView|addContentView|addView|Exient|XGSActivity|GLSurfaceView' "$ACTIVITY" | head -n 220 || true
-  fi
-  echo
-  echo "=== Safety note ==="
-  echo "Selected activity, GL view, XGS activity and renderer smali source files are included in the private diagnostics artifact for integration review; all other decoded resources stay in the runner workspace."
-  echo "The private artifact contains text diagnostics, the decoded manifest and the selected integration smali files; no APK, textures, audio or other game assets are uploaded."
-} > "$REPORT"
- |
+    grep -iE '(menu|ui|interface|button|settings|font|screen)' |
     sed "s#^$DECODE/##" | head -n 240 || true
   echo
   echo "=== Native game UI string hints (text only; no binaries uploaded) ==="
@@ -115,11 +66,9 @@ REPORT="$OUT/android-integration-report.txt"
       echo "Not found: $rel"
     fi
   done
-  # Locate engine activity/renderer classes by basename because apktool may place
-  # them in a multidex smali directory that differs between APK revisions.
   for name in ExientActivity.smali 'ExientGLSurfaceView$Renderer.smali'; do
     while IFS= read -r found; do
-      rel="${found#"$DECODE"/}"
+      rel="$(printf '%s' "$found" | sed "s#^$DECODE/##")"
       mkdir -p "$OUT/integration-smali/$(dirname "$rel")"
       cp "$found" "$OUT/integration-smali/$rel"
       echo "Included: $rel"
@@ -128,7 +77,7 @@ REPORT="$OUT/android-integration-report.txt"
   echo
   echo "=== Engine activity and GL renderer integration references ==="
   find "$DECODE" -type f \( -name 'ExientActivity.smali' -o -name 'ExientGLSurfaceView$Renderer.smali' \) -print0 |
-    xargs -0 grep -nE '^\\.method|onCreate|onResume|onPause|setContentView|addContentView|addView|ExientGLSurfaceView|setRenderer|onDrawFrame|eglSwapBuffers|setFrameRate|LimitFPS|GetDesiredFramerate' 2>/dev/null |
+    xargs -0 grep -nE '^\.method|onCreate|onResume|onPause|setContentView|addContentView|addView|ExientGLSurfaceView|setRenderer|onDrawFrame|eglSwapBuffers|setFrameRate|LimitFPS|GetDesiredFramerate' 2>/dev/null |
     head -n 300 || true
   echo
   echo "=== Main activity lifecycle, view creation and layout references ==="
@@ -139,5 +88,5 @@ REPORT="$OUT/android-integration-report.txt"
   echo
   echo "=== Safety note ==="
   echo "Selected activity, GL view, XGS activity and renderer smali source files are included in the private diagnostics artifact for integration review; all other decoded resources stay in the runner workspace."
-  echo "The private artifact contains text diagnostics, the decoded manifest and the selected integration smali files; no APK, textures, audio or other game assets are uploaded."
+  echo "The private artifact contains text diagnostics, the decoded manifest and selected integration smali files; no APK, textures, audio or other game assets are uploaded."
 } > "$REPORT"
