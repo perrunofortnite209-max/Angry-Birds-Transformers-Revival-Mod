@@ -12,6 +12,17 @@ TARGETS = {
             "08bd42b91f0900716100005480078052c0035fd6e0031f2ac0035fd6"
         ), "instruction_offset": 0x24,
         "old": bytes.fromhex("80078052"), "new": bytes.fromhex("00128052"),
+        "additional": [{
+            "function": "CDeviceConfig::GetDesiredFramerate",
+            "signature": bytes.fromhex(
+                "fd7bbfa9fd0300918ee4ff97a8320090"
+                "8907805208b548b91f010071c8038052"
+                "2801881a1f0000710001801afd7bc1a8c0035fd6"
+            ),
+            "instruction_offset": 0x1c,
+            "old": bytes.fromhex("c8038052"),
+            "new": bytes.fromhex("08128052"),
+        }],
     },
     "lib/armeabi-v7a/libABBS.so": {
         "abi": "ARM32", "signature": bytes.fromhex(
@@ -20,6 +31,17 @@ TARGETS = {
             "0000a0131eff2fe10000a0e31eff2fe1"
         ), "instruction_offset": 0x28,
         "old": bytes.fromhex("3c00a0e3"), "new": bytes.fromhex("9000a0e3"),
+        "additional": [{
+            "function": "CDeviceConfig::GetDesiredFramerate",
+            "signature": bytes.fromhex(
+                "00482de976e3ffeb1c109fe51e20a0e3"
+                "01108fe0041091e5000051e33c200003"
+                "000050e30200a0010088bde8"
+            ),
+            "instruction_offset": 0x0c,
+            "old": bytes.fromhex("1e20a0e3"),
+            "new": bytes.fromhex("9002a0e3"),
+        }],
     },
 }
 
@@ -57,31 +79,33 @@ def main() -> None:
             if names.count(path) != 1:
                 raise RuntimeError(f"{path}: entrada ausente o duplicada")
             original = zin.read(path)
-            function_offset = find_unique(original, spec["signature"], path)
-            offset = function_offset + spec["instruction_offset"]
-            before = original[offset:offset+4]
-            if before != spec["old"]:
-                raise RuntimeError(
-                    f"{path} offset {offset:#x}: bytes {before.hex()} inesperados; "
-                    f"se esperaban {spec['old'].hex()}"
-                )
             patched = bytearray(original)
-            patched[offset:offset+4] = spec["new"]
-            if bytes(patched[offset:offset+4]) != spec["new"]:
-                raise RuntimeError(f"{path}: verificación posterior fallida")
-            # The exact function signature must now be absent; the modified bytes must be present.
-            if bytes(patched).find(spec["signature"]) != -1:
-                raise RuntimeError(f"{path}: la firma original sigue presente")
+            patch_specs = [spec] + spec.get("additional", [])
+            for patch_spec in patch_specs:
+                function_offset = find_unique(bytes(patched), patch_spec["signature"], path)
+                offset = function_offset + patch_spec["instruction_offset"]
+                before = bytes(patched[offset:offset+4])
+                if before != patch_spec["old"]:
+                    raise RuntimeError(
+                        f"{path} {patch_spec.get('function', 'CApp::GetDesiredFramerate')} "
+                        f"offset {offset:#x}: bytes {before.hex()} inesperados; "
+                        f"se esperaban {patch_spec['old'].hex()}"
+                    )
+                patched[offset:offset+4] = patch_spec["new"]
+                if bytes(patched[offset:offset+4]) != patch_spec["new"]:
+                    raise RuntimeError(f"{path}: verificación posterior fallida")
+                if bytes(patched).find(patch_spec["signature"]) != -1:
+                    raise RuntimeError(f"{path}: la firma original sigue presente")
+                report["patches"].append({
+                    "path": path, "abi": patch_spec.get("abi", spec["abi"]),
+                    "function": patch_spec.get("function", "CApp::GetDesiredFramerate"),
+                    "function_file_offset": hex(function_offset),
+                    "instruction_file_offset": hex(offset),
+                    "before": before.hex(), "after": patch_spec["new"].hex(),
+                    "library_sha256_before": sha256(original),
+                    "verified": True,
+                })
             replacements[path] = bytes(patched)
-            report["patches"].append({
-                "path": path, "abi": spec["abi"],
-                "function_file_offset": hex(function_offset),
-                "instruction_file_offset": hex(offset),
-                "before": before.hex(), "after": spec["new"].hex(),
-                "library_sha256_before": sha256(original),
-                "library_sha256_after": sha256(bytes(patched)),
-                "verified": True,
-            })
         output = io.BytesIO()
         with zipfile.ZipFile(output, "w") as zout:
             for info in zin.infolist():
