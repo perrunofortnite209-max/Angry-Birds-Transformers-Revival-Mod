@@ -71,7 +71,11 @@ def parse_pak(blob, label, out_dir):
             if compression == 1:
                 data = zlib.decompress(raw)
             elif compression == 2:
-                raise ValueError(f"{label}: LZ4 entry found; LZ4 decoder not implemented")
+                try:
+                    import lz4.block
+                except ImportError as exc:
+                    raise RuntimeError("LZ4 entries require the Python package 'lz4'") from exc
+                data = lz4.block.decompress(raw, uncompressed_size=unpacked)
             else:
                 raise ValueError(f"{label}: compressed entry but archive compression is raw")
         else:
