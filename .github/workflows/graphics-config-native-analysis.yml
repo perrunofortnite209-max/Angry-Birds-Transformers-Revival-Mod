@@ -8,6 +8,7 @@ on:
       - "tools/trace_render_scale_references.py"
       - "tools/trace_render_scale_globals.py"
       - "tools/trace_explosion_hotspots.py"
+      - "tools/trace_particle_manager_detail.py"
       - ".github/workflows/graphics-config-native-analysis.yml"
   workflow_dispatch:
 permissions:
@@ -78,7 +79,7 @@ jobs:
           Path(report).write_text("\n".join(lines) + "\n", encoding="utf-8")
           print("\n".join(lines[:120]))
           PY
-      - name: Upload text report
+      - name: Trace particle manager internals (read-only)\n        run: python tools/trace_particle_manager_detail.py "$APK" "$RUNNER_TEMP/out/particle-manager-detail.txt"\n      - name: Upload text report
         uses: actions/upload-artifact@v4
         with:
           name: native-graphics-config-xrefs
@@ -87,7 +88,7 @@ jobs:
             ${{ runner.temp }}/out/performance-profile-table.txt
             ${{ runner.temp }}/out/render-scale-reference-trace.txt
             ${{ runner.temp }}/out/render-scale-global-references.txt
-            ${{ runner.temp }}/out/explosion-particle-hotspots.txt
+            ${{ runner.temp }}/out/explosion-particle-hotspots.txt\n            ${{ runner.temp }}/out/particle-manager-detail.txt
             ${{ runner.temp }}/out/pak-inventory.txt
             ${{ runner.temp }}/out/deviceconfigs-report.txt
             ${{ runner.temp }}/out/deviceconfigs-extracted/**
