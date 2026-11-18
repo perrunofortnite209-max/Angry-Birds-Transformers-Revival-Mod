@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Produce a text-only map of Exient UI registrations and frontend navigation hints.
+"""Produce a text-only map of Exient XGS UI registrations and decoded XOX2 string tables.
 
-This is deliberately diagnostic: it does not rewrite, unpack, or repack game assets.
+Read-only diagnostics only: never rewrites or repacks game assets.
 """
+import struct
 import sys
 from pathlib import Path
 
@@ -19,24 +20,66 @@ nav_terms = (
     "SplashScreenPlay", "ShowSettingsScreen", "ShowMapScreen",
     "ShowMainMenu", "MainMenu", "MapScreen",
 )
+
+def decode_xox2_strings(data):
+    # XOX2 resources begin with a string-count field followed by a table of
+    # relative string offsets. Validate the complete table before decoding.
+    if len(data) < 12 or data[:4] != b"XOX2":
+        return None
+    count = struct.unpack_from("<I", data, 4)[0]
+    if count == 0 or count > 100000:
+        return None
+    table_start = 12
+    table_end = table_start + count * 4
+    if table_end > len(data):
+        return None
+    offsets = struct.unpack_from("<" + "I" * count, data, table_start)
+    pool = data[table_end:]
+    decoded = []
+    for offset in offsets:
+        if offset >= len(pool):
+            return None
+        end = pool.find(b"\\0", offset)
+        if end < 0:
+            return None
+        raw = pool[offset:end]
+        value = raw.decode("utf-8", "replace")
+        if value and any(ord(ch) < 32 and ch not in "\\t" for ch in value):
+            return None
+        decoded.append(value)
+    return decoded
+
 rows = [
     "EXIENT XGS UI DIAGNOSTICS",
-    "Read-only string-context report; not a decoded/editable UI document.",
+    "Read-only report; XOX2 string tables decoded only when their offset table validates.",
+    "No game resources are modified or repacked.",
     "",
 ]
 screen_rows = []
 nav_rows = []
-for path in sorted(root.rglob("*.xml")):
+for path in sorted(root.rglob("*")):
+    if not path.is_file():
+        continue
     try:
         data = path.read_bytes()
     except OSError:
         continue
-    text = data.decode("utf-8", "replace").replace("\x00", "\n")
-    hits = [term for term in terms if term in text]
+    rel = str(path.relative_to(root))
+    decoded = decode_xox2_strings(data)
+    if decoded is not None:
+        lines = decoded
+        rows.append(f"XOX2 STRING TABLE {rel} ({len(decoded)} strings)")
+        for i, value in enumerate(decoded):
+            if value:
+                rows.append(f"  S{i:04d}: {value[:500]}")
+        rows.append("")
+    else:
+        text = data.decode("utf-8", "replace").replace("\\x00", "\\n")
+        lines = text.splitlines()
+    joined = "\\n".join(lines)
+    hits = [term for term in terms if term in joined]
     if not hits:
         continue
-    rel = str(path.relative_to(root))
-    lines = [line.strip() for line in text.splitlines()]
     rows.append(f"FILE {rel}")
     rows.append("MATCHES " + ", ".join(hits))
     for i, line in enumerate(lines):
@@ -56,5 +99,5 @@ rows.extend(screen_rows or ["No registerScreen strings found."])
 rows.extend(["", "=== FRONTEND / NAVIGATION HINTS ==="])
 rows.extend(nav_rows or ["No navigation hints found."])
 out.parent.mkdir(parents=True, exist_ok=True)
-out.write_text("\n".join(rows) + "\n", encoding="utf-8")
+out.write_text("\\n".join(rows) + "\\n", encoding="utf-8")
 print(f"UI map: {len(rows)} report lines -> {out}")
