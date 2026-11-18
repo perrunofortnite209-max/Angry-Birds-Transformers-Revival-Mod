@@ -10,25 +10,29 @@
 
 ## Fase 2 — Ingeniería inversa
 
-- [ ] Mapear funciones de inicialización y renderizado en `libABBS.so`.
-- [ ] Localizar el origen de los objetivos de 30 y 60 FPS.
-- [ ] Determinar el comportamiento de `LowBatteryFPSCap`.
-- [ ] Analizar si el motor separa simulación y renderizado.
-- [ ] Documentar offsets por versión y ABI, evitando offsets universales sin validar.
+- [x] Localizar la pantalla nativa de ajustes `EScreen_FE_Settings`.
+- [x] Confirmar que existe una pantalla nativa reutilizable `EScreen_FE_FeatureConfig` con interruptores y guardado para el siguiente inicio.
+- [x] Localizar el botón de Feature Config actualmente oculto dentro de la pantalla de ajustes.
+- [x] Confirmar que `deviceconfigs.pak` admite reconstrucción reversible y que los perfiles XOX2 pasan la validación cruzada.
+- [ ] Confirmar el origen exacto de la configuración global de funciones que consume el motor.
+- [ ] Confirmar cómo resuelve el motor el perfil gráfico para dispositivos Android no listados.
+- [ ] Diseñar un perfil gráfico optimizado conservador que no modifique el desbloqueo de FPS.
+- [ ] Verificar el comportamiento de lectura/escritura del interruptor gráfico en el arranque.
 
-## Fase 3 — Primer prototipo
+## Fase 3 — Integración Revival Mod
 
-- [ ] Diseñar un cambio mínimo, reversible y específico de versión.
-- [ ] Preparar una configuración de FPS con valores disponibles según el dispositivo.
-- [ ] Implementar o integrar el panel flotante solo cuando se conozca un punto de integración estable.
-- [ ] Añadir el mensaje de bienvenida solicitado.
-- [ ] Mantener los ajustes gráficos originales como predeterminados.
+- [ ] Reutilizar la pantalla nativa de configuración y exponerla en Ajustes con el nombre `MOD SETTINGS`.
+- [ ] Colocar el control `PARCHE GRÁFICO` junto a los controles de FPS y las demás opciones del mod.
+- [ ] Mantener el perfil original como predeterminado y permitir activar/desactivar el perfil optimizado.
+- [ ] Conservar los controles de FPS ya existentes y su desbloqueo.
+- [ ] Integrar el mensaje de bienvenida en el primer inicio, con opción para cerrarlo.
+- [ ] Reemplazar el icono de launcher (adaptativo y heredado) usando el recurso gráfico proporcionado por el usuario.
 - [ ] Firmar una compilación de prueba con una clave de desarrollo propia.
 
 ## Fase 4 — Pruebas
 
 - [ ] Probar instalación limpia y actualización/reversión.
-- [ ] Medir FPS sostenidos, tiempos de fotograma y temperatura.
+- [ ] Medir FPS sostenidos, tiempos de fotograma y temperatura con el parche gráfico apagado y encendido.
 - [ ] Comprobar animaciones, física, colisiones, interfaz, audio y consumo de batería.
 - [ ] Probar 30/60/90/120/144 solo en pantallas y dispositivos que anuncien esos modos.
 - [ ] Verificar ARM64 y ARMv7 por separado.
