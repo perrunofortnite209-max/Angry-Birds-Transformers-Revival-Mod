@@ -32,7 +32,7 @@ def main():
             blob=sec.data(); base=int(sec.header.sh_addr)
             for needle in NEEDLES:
                 for m in re.finditer(re.escape(needle),blob,re.I):
-                    raw=blob[m.start():m.start()+160].split(b"\\0",1)[0]
+                    raw=blob[m.start():m.start()+160].split(b"\0",1)[0]
                     found.append((base+m.start(),raw.decode("ascii","replace"),sec.name))
         found=sorted(set(found))
         out += [f"ELF={elf_path.name} machine={elf.header['e_machine']}",
@@ -57,7 +57,7 @@ def main():
                 op=ins.operands[1]
                 if op.type==arm64_const.ARM64_OP_IMM and (op.imm & ~0xfff)==page:
                     candidates.append(i)
-            out.append(f"\\nSTRING {secname} VA=0x{va:x}: {s}")
+            out.append(f"\nSTRING {secname} VA=0x{va:x}: {s}")
             out.append(f"XREF_PAGE_CANDIDATES={len(candidates)}")
             for idx in candidates:
                 ins=insns[idx]; owner="unknown"
@@ -66,7 +66,7 @@ def main():
                 out.append(f"  at 0x{ins.address:x} function={owner}")
                 for near in insns[max(0,idx-3):min(len(insns),idx+8)]:
                     out.append(f"    {near.address:08x}: {near.mnemonic:8} {near.op_str}")
-        report_path.write_text("\\n".join(out)+"\\n",encoding="utf-8")
+        report_path.write_text("\n".join(out)+"\n",encoding="utf-8")
     print(f"Wrote {len(out)} lines to {report_path}")
 
 if __name__=="__main__": main()
