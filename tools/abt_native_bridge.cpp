@@ -38,21 +38,23 @@ static int current_graphics(uintptr_t base) {
 static int set_graphics(uintptr_t base, int target) {
     if (target < 0 || target > 3) return -1;
 
-    // Use the engine's direct profile loader instead of editing its internal
-    // current-profile field and simulating a ChangePerformance() step.
-    // Disassembly confirms LoadDeviceConfigByPerformance(enum) indexes the
-    // native profile table at 0xcb07c0, loads the matching deviceconfig XML,
-    // and updates m_eCurrentPerformance only after the load succeeds.
-    using LoadByPerformance = int (*)(int);
-    auto load = reinterpret_cast<LoadByPerformance>(base + 0x6ed26c);
-
     const int previous = current_graphics(base);
+    if (previous < 0 || previous > 4) return -2;
     if (previous == target) return target + 1;
 
-    const int loaded = load(target);
+    // ChangePerformance is the engine's complete runtime path: it loads the
+    // adjacent profile, commits m_eCurrentPerformance, resets FPS profiling,
+    // and refreshes the active renderer/device resources. Calling only
+    // LoadDeviceConfigByPerformance() loads the XML but skips that refresh.
+    using ChangePerformance = int (*)(int);
+    auto change = reinterpret_cast<ChangePerformance>(base + 0x6ed4b8);
+    const int direction = target > previous ? 1 : -1;
+    const int changed = change(direction);
     const int updated = current_graphics(base);
-    if (loaded && updated == target) return updated + 1;
-    return loaded ? -3 : -2;
+
+    // The native method returns 1 only when the profile transition succeeds.
+    if (changed == 1 && updated == target) return updated + 1;
+    return changed == 1 ? -3 : -4;
 }
 
 } // namespace
