@@ -39,7 +39,7 @@ jobs:
           cargo build --release --manifest-path /tmp/abgtool/abgtool/Cargo.toml
       - name: Decode with independent abgtool and compare
         run: |
-          /tmp/abgtool/target/release/abgtool xox /tmp/xox2-sample.xml > /tmp/xox2-decoded.xml
+          cargo run --quiet --release --manifest-path /tmp/abgtool/abgtool/Cargo.toml -- xox /tmp/xox2-sample.xml > /tmp/xox2-decoded.xml
           python - <<'PY'
           from pathlib import Path
           source = Path("/tmp/xox2-source.xml").read_bytes()
