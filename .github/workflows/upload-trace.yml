@@ -1,8 +1,12 @@
-
 name: Upload Perfetto Trace
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/upload-trace.yml
 
 jobs:
   upload:
@@ -10,7 +14,7 @@ jobs:
     steps:
       - name: Download trace from release
         run: |
-          curl -L \
+          curl -fL --retry 3 \
             "https://github.com/perrunofortnite209-max/Angry-Birds-Transformers-Revival-Mod/releases/download/game/abt.pftrace" \
             -o abt.pftrace
 
