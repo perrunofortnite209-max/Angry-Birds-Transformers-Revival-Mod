@@ -5,6 +5,7 @@ on:
     branches: [feature/full-revival-mod]
     paths:
       - ".github/workflows/featureconfig-inspection.yml"
+      - "tools/xgs_kpx_v2.py"
   workflow_dispatch:
 
 permissions:
