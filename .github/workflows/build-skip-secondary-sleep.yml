@@ -21,16 +21,16 @@ jobs:
 
       - name: Download original APK from release
         env:
-          GH_TOKEN: \${{ github.token }}
-          RELEASE_TAG: \${{ inputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
           mkdir -p input output
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "*.apk" --dir input
           mapfile -t APKS < <(find input -maxdepth 1 -type f -name '*.apk')
-          test "\${#APKS[@]}" -eq 1
-          echo "APK_FILE=\${APKS[0]}" >> "$GITHUB_ENV"
-          sha256sum "\${APKS[0]}"
+          test "${#APKS[@]}" -eq 1
+          echo "APK_FILE=${APKS[0]}" >> "$GITHUB_ENV"
+          sha256sum "${APKS[0]}"
 
       - name: Patch only the secondary limiter call
         run: |
