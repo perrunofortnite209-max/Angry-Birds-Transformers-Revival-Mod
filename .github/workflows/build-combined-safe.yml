@@ -1,7 +1,7 @@
 name: Build Revival Mod safe combined APK
 on:
   push:
-    branches: [feature/full-revival-mod, feature/ball-10s-experimental-quality]
+    branches: [feature/full-revival-mod, feature/ball-10s-experimental-quality, feature/cpu-optimization-preset]
     paths:
       - "tools/build_combined_safe_apk.py"
       - "tools/build_visual_test_apk.py"
