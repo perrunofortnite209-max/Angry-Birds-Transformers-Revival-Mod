@@ -81,6 +81,7 @@ jobs:
               -postScript TracePresentSceneCallers.java "reports/present-scene-callers-$ABI.txt" \
               -postScript TracePresentSceneTables.java "reports/present-scene-tables-$ABI.txt" \
               -postScript TraceGraphicsSyncVirtualCalls.java "reports/graphics-sync-virtual-calls-$ABI.txt" \
+              -postScript TraceDoPresentVirtuals.java "reports/do-present-virtuals-$ABI.txt" \
               -analysisTimeoutPerFile 900
           done
 
