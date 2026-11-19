@@ -270,6 +270,8 @@ def patch_welcome(decoded, report):
     invoke-direct {v2, p0, v1}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;-><init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;Ljava/lang/Runnable;)V
     invoke-virtual {v5, v2}, Landroid/view/View;->setOnTouchListener(Landroid/view/View$OnTouchListener;)V
     invoke-virtual {v4, v5, v0}, Landroid/view/ViewGroup;->addView(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V
+    const-wide/16 v2, 0x2710
+    invoke-virtual {v5, v1, v2, v3}, Landroid/view/View;->postDelayed(Ljava/lang/Runnable;J)Z
     invoke-virtual {v5}, Landroid/view/View;->animate()Landroid/view/ViewPropertyAnimator;
     move-result-object v1
     const v2, 0x3f0ccccd
@@ -324,7 +326,7 @@ def patch_welcome(decoded, report):
     move-result-object v4
     const/4 v1, 0x2
     new-array v2, v1, [Ljava/lang/CharSequence;
-    const-string v3, "Ocultar automáticamente después de 30 segundos"
+    const-string v3, "Ocultar automáticamente después de 10 segundos"
     const/4 v5, 0x0
     aput-object v3, v2, v5
     const-string v3, "Vibración al tocar la bolita"
@@ -446,6 +448,9 @@ def patch_welcome(decoded, report):
  :touch_drag_start
  const/4 v1, 0x1
  iput-boolean v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->moved:Z
+ invoke-virtual {p1}, Landroid/view/View;->bringToFront()V
+ const/high16 v1, 0x42c80000
+ invoke-virtual {p1, v1}, Landroid/view/View;->setElevation(F)V
  invoke-virtual {p1}, Landroid/view/View;->getParent()Landroid/view/ViewParent;
  move-result-object v5
  check-cast v5, Landroid/view/View;
@@ -491,15 +496,11 @@ def patch_welcome(decoded, report):
  iget-object v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->activity:Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;
  invoke-virtual {v1}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->showRevivalSettings()V
  :touch_schedule
- invoke-virtual {p1}, Landroid/view/View;->animate()Landroid/view/ViewPropertyAnimator;
- move-result-object v1
- const v2, 0x3f0ccccd
- invoke-virtual {v1, v2}, Landroid/view/ViewPropertyAnimator;->alpha(F)Landroid/view/ViewPropertyAnimator;
- move-result-object v1
- const-wide/16 v2, 0x1388
- invoke-virtual {v1, v2, v3}, Landroid/view/ViewPropertyAnimator;->setDuration(J)Landroid/view/ViewPropertyAnimator;
- move-result-object v1
- invoke-virtual {v1}, Landroid/view/ViewPropertyAnimator;->start()V
+ const/high16 v2, 0x3f800000
+ invoke-virtual {p1, v2}, Landroid/view/View;->setAlpha(F)V
+ iget-object v1, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallTouchListener;->hideTask:Ljava/lang/Runnable;
+ const-wide/16 v2, 0x2710
+ invoke-virtual {p1, v1, v2, v3}, Landroid/view/View;->postDelayed(Ljava/lang/Runnable;J)Z
  const/4 v1, 0x1
  return v1
  :touch_other
@@ -532,7 +533,7 @@ def patch_welcome(decoded, report):
  move-result v1
  if-eqz v1, :hide_done
  iget-object v0, p0, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalBallHideTask;->ball:Landroid/view/View;
- const v1, 0x3f0ccccd
+ const/4 v1, 0x0
  invoke-virtual {v0, v1}, Landroid/view/View;->setAlpha(F)V
  :hide_done
  return-void
@@ -575,7 +576,7 @@ def patch_welcome(decoded, report):
     for name,content in files.items():
         (base/name).write_text(content.lstrip(),encoding="utf-8")
     report["welcome"]={"first_launch_only":True,"dismissible":True,"method":"Android AlertDialog + SharedPreferences"}
-    report["floating_ball"]={"draggable":True,"auto_hide_seconds":30,"overlay_permission":False,"settings":["auto_hide","ball_haptics"],"pak_modified":False}
+    report["floating_ball"]={"draggable":True,"auto_hide_seconds":10,"auto_hide_mode":"alpha_zero_but_touchable","overlay_permission":False,"settings":["auto_hide","ball_haptics"],"pak_modified":False}
 
 def main():
     ap=argparse.ArgumentParser()
