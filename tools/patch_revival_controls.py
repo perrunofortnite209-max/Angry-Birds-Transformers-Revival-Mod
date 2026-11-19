@@ -345,7 +345,7 @@ def patch(decoded: Path, report: dict):
     return-void
 .end method
 """
-    source += "\\n"+cpu_helper+"\\n"
+    source += "\n"+cpu_helper+"\n"
     path.write_text(source,encoding="utf-8")
 
     smali_root=next((p for p in path.parents if p.name.startswith("smali")),None)
