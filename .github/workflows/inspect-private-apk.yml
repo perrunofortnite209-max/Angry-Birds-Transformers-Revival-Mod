@@ -91,3 +91,5 @@ jobs:
           path: reports/*.txt
           if-no-files-found: error
           retention-days: 7
+
+# Re-run read-only GraphicsSync virtual-dispatch tracing.
