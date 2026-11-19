@@ -35,7 +35,7 @@ def patch(decoded: Path, report: dict):
     invoke-direct {v0, p0}, Landroid/app/AlertDialog$Builder;-><init>(Landroid/content/Context;)V
     const-string v1, "REVIVAL MOD"
     invoke-virtual {v0, v1}, Landroid/app/AlertDialog$Builder;->setTitle(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;
-    const/4 v1, 0x3
+    const/4 v1, 0x4
     new-array v1, v1, [Ljava/lang/CharSequence;
     const-string v2, "Límite de FPS"
     const/4 v3, 0x0
@@ -45,6 +45,9 @@ def patch(decoded: Path, report: dict):
     aput-object v2, v1, v3
     const-string v2, "Opciones de la bolita"
     const/4 v3, 0x2
+    aput-object v2, v1, v3
+    const-string v2, "Optimización CPU (60 FPS + gráficos bajos)"
+    const/4 v3, 0x3
     aput-object v2, v1, v3
     new-instance v2, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalMenuClickListener;
     invoke-direct {v2, p0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalMenuClickListener;-><init>(Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;)V
@@ -302,6 +305,47 @@ def patch(decoded: Path, report: dict):
         super_desc=super_match.group(1) if super_match else "Landroid/app/Activity;"
         source += "\n.method protected onResume()V\n    .locals 0\n    invoke-super {p0}, "+super_desc+"->onResume()V\n    invoke-virtual {p0}, "+DESC+"->applySavedRevivalSettings()V\n    return-void\n.end method\n"
 
+
+    cpu_helper=r"""
+.method public applyRevivalCpuOptimization()V
+    .locals 5
+    # Balanced preset: lower render complexity and cap at 60 FPS to reduce frame workload.
+    const/4 v0, 0x0
+    invoke-static {v0}, Lcom/rovio/angrybirdstransformers/RevivalNative;->setGraphicsLevel(I)I
+    move-result v1
+    const/16 v0, 0x3c
+    invoke-static {v0}, Lcom/rovio/angrybirdstransformers/RevivalNative;->setFps(I)I
+    move-result v2
+    const-string v3, "abt_revival_mod"
+    const/4 v4, 0x0
+    invoke-virtual {p0, v3, v4}, Landroid/content/Context;->getSharedPreferences(Ljava/lang/String;I)Landroid/content/SharedPreferences;
+    move-result-object v3
+    invoke-interface {v3}, Landroid/content/SharedPreferences;->edit()Landroid/content/SharedPreferences$Editor;
+    move-result-object v3
+    const-string v4, "graphics_profile"
+    const/4 v0, 0x0
+    invoke-interface {v3, v4, v0}, Landroid/content/SharedPreferences$Editor;->putInt(Ljava/lang/String;I)Landroid/content/SharedPreferences$Editor;
+    move-result-object v3
+    const-string v4, "fps_limit"
+    const/16 v0, 0x3c
+    invoke-interface {v3, v4, v0}, Landroid/content/SharedPreferences$Editor;->putInt(Ljava/lang/String;I)Landroid/content/SharedPreferences$Editor;
+    move-result-object v3
+    invoke-interface {v3}, Landroid/content/SharedPreferences$Editor;->apply()V
+    if-lez v1, :cpu_failed
+    if-lez v2, :cpu_failed
+    const-string v0, "Optimización aplicada: 60 FPS y gráficos bajos."
+    goto :cpu_toast
+    :cpu_failed
+    const-string v0, "No se pudo aplicar todo el perfil."
+    :cpu_toast
+    const/4 v1, 0x0
+    invoke-static {p0, v0, v1}, Landroid/widget/Toast;->makeText(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;
+    move-result-object v2
+    invoke-virtual {v2}, Landroid/widget/Toast;->show()V
+    return-void
+.end method
+"""
+    source += "\\n"+cpu_helper+"\\n"
     path.write_text(source,encoding="utf-8")
 
     smali_root=next((p for p in path.parents if p.name.startswith("smali")),None)
@@ -348,7 +392,12 @@ def patch(decoded: Path, report: dict):
  invoke-virtual {v0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->showRevivalGraphicsDialog()V
  return-void
  :menu_ball
+ const/4 v1, 0x2
+ if-ne p2, v1, :menu_cpu
  invoke-virtual {v0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->showRevivalBallOptions()V
+ return-void
+ :menu_cpu
+ invoke-virtual {v0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->applyRevivalCpuOptimization()V
  return-void
 .end method
 """.strip()+"\n",encoding="utf-8")
