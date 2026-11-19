@@ -79,6 +79,7 @@ jobs:
               -postScript FindGraphicsSyncCalls.java "reports/graphics-sync-audit-$ABI.txt" \
               -postScript TraceGraphicsSyncAndPresent.java "reports/graphics-sync-callers-$ABI.txt" \
               -postScript TracePresentSceneCallers.java "reports/present-scene-callers-$ABI.txt" \
+              -postScript TracePresentSceneTables.java "reports/present-scene-tables-$ABI.txt" \
               -analysisTimeoutPerFile 900
           done
 
