@@ -400,7 +400,12 @@ def patch(decoded: Path, report: dict):
  invoke-virtual {v0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->showRevivalBallOptions()V
  return-void
  :menu_cpu
+ const/4 v1, 0x3
+ if-ne p2, v1, :menu_gpu
  invoke-virtual {v0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->applyRevivalCpuOptimization()V
+ return-void
+ :menu_gpu
+ invoke-virtual {v0}, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity;->applyRevivalGpuOptimization()V
  return-void
 .end method
 """.strip()+"\n",encoding="utf-8")
