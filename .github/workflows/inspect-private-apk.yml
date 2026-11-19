@@ -93,3 +93,5 @@ jobs:
           retention-days: 7
 
 # Re-run read-only GraphicsSync virtual-dispatch tracing.
+
+# Ensure latest virtual-call scan is included in the next read-only run.
