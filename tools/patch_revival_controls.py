@@ -105,7 +105,7 @@ def patch(decoded: Path, report: dict):
     const-string v2, "Alta  ·  android-generic_high"
     const/4 v3, 0x2
     aput-object v2, v1, v3
-    const-string v2, "Extraalta  ·  android-generic_extrahigh"
+    const-string v2, "Experimental  ·  android-generic_extrahigh"
     const/4 v3, 0x3
     aput-object v2, v1, v3
     new-instance v2, Lcom/rovio/angrybirdstransformers/AngryBirdsTransformersActivity$RevivalGraphicsListener;
@@ -211,7 +211,7 @@ def patch(decoded: Path, report: dict):
     const-string v3, "Calidad alta aplicada."
     goto :graphics_toast
     :graphics_extra
-    const-string v3, "Calidad extraalta aplicada."
+    const-string v3, "Calidad experimental aplicada."
     goto :graphics_toast
     :graphics_read_after_failure
     invoke-static {}, Lcom/rovio/angrybirdstransformers/RevivalNative;->getGraphicsLevel()I
