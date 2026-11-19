@@ -1,7 +1,7 @@
 name: Build Revival Mod safe combined APK
 on:
   push:
-    branches: [feature/full-revival-mod]
+    branches: [feature/full-revival-mod, feature/ball-10s-experimental-quality]
     paths:
       - "tools/build_combined_safe_apk.py"
       - "tools/build_visual_test_apk.py"
@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feature/full-revival-mod
+          ref: ${{ github.ref_name }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
