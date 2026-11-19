@@ -87,6 +87,7 @@ public class TraceFpsControlData extends GhidraScript {
                 w.println("DATA TARGET " + target);
                 Symbol sym = currentProgram.getSymbolTable().getPrimarySymbol(target);
                 if (sym != null) w.println("  SYMBOL " + sym.getName());
+                if (!target.isMemoryAddress()) { w.println("  [skip non-memory target]"); continue; }
                 ReferenceIterator ri = refs.getReferencesTo(target);
                 int n = 0;
                 while (ri.hasNext() && n++ < 100) {
